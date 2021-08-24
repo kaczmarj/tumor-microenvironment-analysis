@@ -26,6 +26,7 @@ including cell polygons and heatmaps.
 
 import csv
 import enum
+import itertools
 import json
 from pathlib import Path
 import typing as ty
@@ -66,8 +67,17 @@ class Patch(ty.NamedTuple):
 class Cell(ty.NamedTuple):
     polygon: Polygon
     cell_type: str
-    lattice_points: MultiPoint
     uuid: str
+
+    @property
+    def lattice_points(self) -> MultiPoint:
+        """Lattice points of the polygon (all integer points that make up polygon)."""
+        # convert values to int
+        xmin, ymin, xmax, ymax = map(round, self.polygon.bounds)
+        coords = itertools.product(range(xmin, xmax + 1), range(ymin, ymax + 1))
+        points = (Point(*p) for p in coords)
+        points = MultiPoint(list(points)).intersection(self.polygon)
+        return points
 
 
 Patches = ty.List[Patch]
@@ -141,11 +151,14 @@ def _distances_for_cell_in_microenv(
             positive_patches=marker_positive_geom,
             negative_patches=marker_negative_geom,
         )
-        lines_from_point_to_patches = _get_nearest_points_for_point(
-            cell_point,
-            positive_patches=marker_positive_geom,
-            negative_patches=marker_negative_geom,
-        )
+        try:
+            lines_from_point_to_patches = _get_nearest_points_for_point(
+                cell_point,
+                positive_patches=marker_positive_geom,
+                negative_patches=marker_negative_geom,
+            )
+        except ValueError:
+            continue
         yield _PointOutputData(
             point=cell_point.wkt,
             dist_to_marker_neg=distances.dnegative,
@@ -261,17 +274,19 @@ class LoaderV1(BaseLoader):
 
     def __init__(
         self,
-        patch_paths: ty.List[PathType],
-        cells_json: PathType,
+        patch_paths: ty.Sequence[PathType],
+        cells_json: ty.Sequence[PathType],
         background: int,
         marker_positive: int,
         marker_negative: int,
+        marker_neg_thresh: float = 0.3,
     ):
         self.patch_paths = patch_paths
         self.cells_json = cells_json
         self.background = background
         self.marker_positive = marker_positive
         self.marker_negative = marker_negative
+        self.marker_neg_thresh = marker_neg_thresh
 
     @staticmethod
     def _path_to_polygon(path) -> Polygon:
@@ -297,10 +312,11 @@ class LoaderV1(BaseLoader):
         percent_tumor = tumor_mask.mean()
         percent_blank = blank_mask.mean()
         if percent_tumor > 0.5:
-            if marker_pos_mask.mean() > marker_neg_mask.mean():
-                return _PatchType.TUMOR, _BiomarkerStatus.POSITIVE
-            else:
+            n_tumor_points = tumor_mask.sum()
+            if marker_neg_mask.sum() / n_tumor_points > self.marker_neg_thresh:
                 return _PatchType.TUMOR, _BiomarkerStatus.NEGATIVE
+            else:
+                return _PatchType.TUMOR, _BiomarkerStatus.POSITIVE
         elif percent_blank > 0.5:
             return _PatchType.BLANK, _BiomarkerStatus.NA
         else:
@@ -318,25 +334,35 @@ class LoaderV1(BaseLoader):
         )
         return patch
 
+    def _load_cells(self, path: PathType) -> ty.Generator[Cell, None, None]:
+        with open(path) as f:
+            for line in f:
+                d = json.loads(line)
+                coordinates = d["coordinates"]
+                coordinates = [(int(x), int(y)) for x, y in d["coordinates"]]
+                # TODO: we should support more than just polygons...
+                if len(coordinates) < 3:
+                    continue
+                polygon = Polygon(coordinates)
+                if not polygon.is_valid:
+                    continue
+                cell = Cell(
+                    polygon=polygon,
+                    cell_type=d["stain_class"],
+                    uuid=uuid.uuid4().hex,
+                )
+                yield cell
+
     def load(self) -> ty.Tuple[Patches, Cells]:
         """Load data into a list of Patch objects and a list of Cell objects."""
         patches: Patches = []
         for patch_path in self.patch_paths:
             patches.append(self._npy_file_to_patch_object(path=patch_path))
 
-        with open(self.cells_json) as f:
-            cells_data: ty.List[ty.Dict[str, ty.Any]] = json.load(f)
-
         cells: Cells = []
-        for cell_data in cells_data:
-            cells.append(
-                Cell(
-                    polygon=Polygon(cell_data["coordinates"]),
-                    cell_type=cell_data["type"],
-                    lattice_points=MultiPoint(cell_data["lattice_points"]),
-                    uuid=uuid.uuid4().hex,
-                )
-            )
+        for cells_path in self.cells_json:
+            for cell in self._load_cells(cells_path):
+                cells.append(cell)
 
         return patches, cells
 
