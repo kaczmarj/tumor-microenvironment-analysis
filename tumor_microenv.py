@@ -339,3 +339,34 @@ class LoaderV1(BaseLoader):
             )
 
         return patches, cells
+
+
+def read_point_csv(path: PathType) -> ty.List[_PointOutputData]:
+    with open(path, newline="") as f:
+        reader = csv.reader(f)
+        next(reader)  # skip header
+        return [_PointOutputData._make(r) for r in reader]
+
+
+def plot_point_data_and_tumor(patches: Patches, point_data: _PointOutputData):
+    import matplotlib.pyplot as plt
+    import shapely.wkt
+
+    colors = {
+        _BiomarkerStatus.NA: "white",
+        _BiomarkerStatus.POSITIVE: "brown",
+        _BiomarkerStatus.NEGATIVE: "cyan",
+    }
+    for patch in patches:
+        # Plot tumor patches.
+        if patch.patch_type == _PatchType.TUMOR:
+            plt.fill(*patch.polygon.exterior.xy, color=colors[patch.biomarker_status])
+        # Plot the point we are interested in.
+        point = shapely.wkt.loads(point_data.point)
+        plt.plot(point.x, point.y, color="black")
+        # Plot line to the nearest marker-positive region.
+        line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
+        plt.plot(*line_to_pos.xy, color="brown", linestyle="--")
+        # Plot line to the nearest marker-negative region.
+        line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
+        plt.plot(*line_to_neg.xy, color="cyan", linestyle="--")
