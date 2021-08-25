@@ -102,6 +102,7 @@ class _PointOutputData(ty.NamedTuple):
     dist_to_marker_pos: float
     line_to_marker_neg: str
     line_to_marker_pos: str
+    cell_type: str
     cell_uuid: str
     microenv_micrometer: int
 
@@ -157,6 +158,7 @@ def _distances_for_cell_in_microenv(
                 positive_patches=marker_positive_geom,
                 negative_patches=marker_negative_geom,
             )
+        # Sometimes this can error... but why?
         except ValueError:
             continue
         yield _PointOutputData(
@@ -165,6 +167,7 @@ def _distances_for_cell_in_microenv(
             dist_to_marker_pos=distances.dpositive,
             line_to_marker_neg=lines_from_point_to_patches.line_to_negative.wkt,
             line_to_marker_pos=lines_from_point_to_patches.line_to_positive.wkt,
+            cell_type=cell.cell_type,
             cell_uuid=cell.uuid,
             microenv_micrometer=microenv_micrometer,
         )
@@ -374,7 +377,12 @@ def read_point_csv(path: PathType) -> ty.List[_PointOutputData]:
         return [_PointOutputData._make(r) for r in reader]
 
 
-def plot_point_data_and_tumor(patches: Patches, point_data: _PointOutputData):
+def plot_point_data_and_tumor(
+    patches: Patches, points_data: ty.Sequence[_PointOutputData]
+):
+    """Instead of being an extensible plotting function, this is implemented as an
+    example of plotting our data.
+    """
     import matplotlib.pyplot as plt
     import shapely.wkt
 
@@ -388,8 +396,9 @@ def plot_point_data_and_tumor(patches: Patches, point_data: _PointOutputData):
         if patch.patch_type == _PatchType.TUMOR:
             plt.fill(*patch.polygon.exterior.xy, color=colors[patch.biomarker_status])
         # Plot the point we are interested in.
+    for point_data in points_data:
         point = shapely.wkt.loads(point_data.point)
-        plt.plot(point.x, point.y, color="black")
+        plt.plot(point.x, point.y, color="black", marker="o")
         # Plot line to the nearest marker-positive region.
         line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
         plt.plot(*line_to_pos.xy, color="brown", linestyle="--")
