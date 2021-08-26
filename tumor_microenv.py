@@ -46,13 +46,13 @@ from shapely.ops import unary_union
 PathType = ty.Union[str, bytes, Path]
 
 
-class _PatchType(enum.IntEnum):
+class PatchType(enum.IntEnum):
     BLANK = 0
     TUMOR = 1
     NONTUMOR = 2
 
 
-class _BiomarkerStatus(enum.IntEnum):
+class BiomarkerStatus(enum.IntEnum):
     NA = 0  # tiles that do not contain tumor will be N/A for marker.
     POSITIVE = 1
     NEGATIVE = 2
@@ -60,8 +60,8 @@ class _BiomarkerStatus(enum.IntEnum):
 
 class Patch(ty.NamedTuple):
     polygon: Polygon
-    patch_type: _PatchType
-    biomarker_status: _BiomarkerStatus
+    patch_type: PatchType
+    biomarker_status: BiomarkerStatus
 
 
 class Cell(ty.NamedTuple):
@@ -84,17 +84,17 @@ Patches = ty.List[Patch]
 Cells = ty.List[Cell]
 
 
-class _PosNegDistances(ty.NamedTuple):
+class PosNegDistances(ty.NamedTuple):
     dpositive: float
     dnegative: float
 
 
-class _PosNegLines(ty.NamedTuple):
+class PosNegLines(ty.NamedTuple):
     line_to_positive: LineString
     line_to_negative: LineString
 
 
-class _PointOutputData(ty.NamedTuple):
+class PointOutputData(ty.NamedTuple):
     """Object representing one row in the output file."""
 
     point: str
@@ -119,16 +119,16 @@ def _get_tumor_microenvironment(
 
 def _get_distances_for_point(
     point: Point, positive_patches, negative_patches
-) -> _PosNegDistances:
+) -> PosNegDistances:
     """Get the distances from the point to the nearest positive and negative patches."""
     dpos = point.distance(positive_patches)
     dneg = point.distance(negative_patches)
-    return _PosNegDistances(dpositive=dpos, dnegative=dneg)
+    return PosNegDistances(dpositive=dpos, dnegative=dneg)
 
 
 def _get_nearest_points_for_point(
     point: Point, positive_patches, negative_patches
-) -> _PosNegLines:
+) -> PosNegLines:
     """Get the lines joining the point to the nearest positive patch and the nearest
     negative patch.
     """
@@ -136,7 +136,7 @@ def _get_nearest_points_for_point(
     line_to_neg = nearest_points(point, negative_patches)
     line_to_pos = LineString(line_to_pos)
     line_to_neg = LineString(line_to_neg)
-    return _PosNegLines(line_to_positive=line_to_pos, line_to_negative=line_to_neg)
+    return PosNegLines(line_to_positive=line_to_pos, line_to_negative=line_to_neg)
 
 
 def _distances_for_cell_in_microenv(
@@ -144,7 +144,7 @@ def _distances_for_cell_in_microenv(
     marker_positive_geom,
     marker_negative_geom,
     microenv_micrometer: int,
-) -> ty.Generator[_PointOutputData, None, None]:
+) -> ty.Generator[PointOutputData, None, None]:
     """Yield distance information for one cell."""
     for cell_point in cell.lattice_points.geoms:
         distances = _get_distances_for_point(
@@ -161,7 +161,7 @@ def _distances_for_cell_in_microenv(
         # Sometimes this can error... but why?
         except ValueError:
             continue
-        yield _PointOutputData(
+        yield PointOutputData(
             point=cell_point.wkt,
             dist_to_marker_neg=distances.dnegative,
             dist_to_marker_pos=distances.dpositive,
@@ -195,20 +195,20 @@ def run_spatial_analysis(
     """
     # This is a multipolygon that represents the entire tumor in our region of interest.
     tumor_geom: MultiPolygon = unary_union(
-        [p.polygon for p in patches if p.patch_type == _PatchType.TUMOR]
+        [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
     )
     marker_positive_patches = (
-        p.polygon for p in patches if p.biomarker_status == _BiomarkerStatus.POSITIVE
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
     )
     marker_negative_patches = (
-        p.polygon for p in patches if p.biomarker_status == _BiomarkerStatus.NEGATIVE
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
     )
     marker_positive_geom = unary_union(list(marker_positive_patches))
     marker_negative_geom = unary_union(list(marker_negative_patches))
     del marker_positive_patches, marker_negative_patches
 
     with open(output_path, "w", newline="") as output_csv:
-        dict_writer = csv.DictWriter(output_csv, fieldnames=_PointOutputData._fields)
+        dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
         dict_writer.writeheader()
 
         for distance_um in microenv_distances:
@@ -305,7 +305,7 @@ class LoaderV1(BaseLoader):
     def _patch_to_patch_type_and_biomarker_status(
         self,
         patch,
-    ) -> ty.Tuple[_PatchType, _BiomarkerStatus]:
+    ) -> ty.Tuple[PatchType, BiomarkerStatus]:
         """Return the patch type and biomarker status of the patch."""
         patch = np.asarray(patch)
         marker_pos_mask = patch == self.marker_positive
@@ -317,13 +317,13 @@ class LoaderV1(BaseLoader):
         if percent_tumor > 0.5:
             n_tumor_points = tumor_mask.sum()
             if marker_neg_mask.sum() / n_tumor_points > self.marker_neg_thresh:
-                return _PatchType.TUMOR, _BiomarkerStatus.NEGATIVE
+                return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
             else:
-                return _PatchType.TUMOR, _BiomarkerStatus.POSITIVE
+                return PatchType.TUMOR, BiomarkerStatus.POSITIVE
         elif percent_blank > 0.5:
-            return _PatchType.BLANK, _BiomarkerStatus.NA
+            return PatchType.BLANK, BiomarkerStatus.NA
         else:
-            return _PatchType.NONTUMOR, _BiomarkerStatus.NA
+            return PatchType.NONTUMOR, BiomarkerStatus.NA
 
     def _npy_file_to_patch_object(self, path: PathType) -> Patch:
         """Create a Patch object from a NPY file of segmentation results."""
@@ -370,15 +370,16 @@ class LoaderV1(BaseLoader):
         return patches, cells
 
 
-def read_point_csv(path: PathType) -> ty.List[_PointOutputData]:
+def read_point_csv(path: PathType) -> ty.List[PointOutputData]:
+    """Read CSV of point informaation as a list of PointOutputData namedtuples."""
     with open(path, newline="") as f:
         reader = csv.reader(f)
         next(reader)  # skip header
-        return [_PointOutputData._make(r) for r in reader]
+        return [PointOutputData._make(r) for r in reader]
 
 
 def plot_point_data_and_tumor(
-    patches: Patches, points_data: ty.Sequence[_PointOutputData]
+    patches: Patches, points_data: ty.Sequence[PointOutputData]
 ):
     """Instead of being an extensible plotting function, this is implemented as an
     example of plotting our data.
@@ -387,13 +388,13 @@ def plot_point_data_and_tumor(
     import shapely.wkt
 
     colors = {
-        _BiomarkerStatus.NA: "white",
-        _BiomarkerStatus.POSITIVE: "brown",
-        _BiomarkerStatus.NEGATIVE: "cyan",
+        BiomarkerStatus.NA: "white",
+        BiomarkerStatus.POSITIVE: "brown",
+        BiomarkerStatus.NEGATIVE: "cyan",
     }
     for patch in patches:
         # Plot tumor patches.
-        if patch.patch_type == _PatchType.TUMOR:
+        if patch.patch_type == PatchType.TUMOR:
             plt.fill(*patch.polygon.exterior.xy, color=colors[patch.biomarker_status])
         # Plot the point we are interested in.
     for point_data in points_data:
