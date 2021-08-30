@@ -34,7 +34,6 @@ import uuid
 
 import numpy as np
 from shapely.geometry import box as box_constructor
-from shapely.geometry import JOIN_STYLE
 from shapely.geometry import LineString
 from shapely.geometry import MultiPoint
 from shapely.geometry import MultiPolygon
@@ -114,8 +113,7 @@ def _get_tumor_microenvironment(
     """Return a dilated MultiPolygon of tumors, representing the microenvironment at a
     given distance (in pixels).
     """
-    # mitre will join dilated squares as squares.
-    return tumor_geom.buffer(distance=distance_px, join_style=JOIN_STYLE.mitre)
+    return tumor_geom.buffer(distance=distance_px)
 
 
 def _get_distances_for_point(
@@ -247,7 +245,10 @@ def run_spatial_analysis(
                     microenv_micrometer=distance_um,
                 )
                 for row in row_generator:
-                    dict_writer.writerow(row._asdict())
+                    # Only write the data if it is within our microenvironment.
+                    max_dist = max(row.dist_to_marker_pos, row.dist_to_marker_neg)
+                    if max_dist <= distance_px:
+                        dict_writer.writerow(row._asdict())
 
 
 class BaseLoader:
