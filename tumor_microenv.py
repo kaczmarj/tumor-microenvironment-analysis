@@ -208,6 +208,11 @@ def run_spatial_analysis(
     marker_negative_geom = unary_union(list(marker_negative_patches))
     del marker_positive_patches, marker_negative_patches
 
+    # Polygons of blank tiles, so we can exclude cells in these regions.
+    blank_tiles = unary_union(
+        [p.polygon for p in patches if p.patch_type == PatchType.BLANK]
+    )
+
     with open(output_path, "w", newline="") as output_csv:
         dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
         dict_writer.writeheader()
@@ -224,8 +229,15 @@ def run_spatial_analysis(
             # microenvironment. But here, we take all of the CELLS in the
             # microenvironment. It's much easier to implement this, so let's roll with
             # it.
+            print(
+                "Finding cells that are inside the tumor microenvironment and not in"
+                " blank tiles ..."
+            )
             cells_in_microenv = [
-                cell for cell in cells if tumor_microenv.contains(cell.polygon)
+                cell
+                for cell in cells
+                if tumor_microenv.contains(cell.polygon)
+                and not blank_tiles.intersects(cell.polygon)
             ]
             for cell in tqdm(cells_in_microenv):
                 row_generator = _distances_for_cell_in_microenv(
