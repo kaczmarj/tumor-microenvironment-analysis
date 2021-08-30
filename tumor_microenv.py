@@ -42,6 +42,7 @@ from shapely.geometry import Point
 from shapely.geometry import Polygon
 from shapely.ops import nearest_points
 from shapely.ops import unary_union
+from tqdm import tqdm
 
 PathType = ty.Union[str, bytes, Path]
 
@@ -213,7 +214,7 @@ def run_spatial_analysis(
 
         for distance_um in microenv_distances:
             distance_px = round(distance_um / mpp)
-            print(f"Distance = {distance_um} um ({distance_px} px)")
+            print(f"Working on distance = {distance_um} um ({distance_px} px)")
             tumor_microenv = _get_tumor_microenvironment(
                 tumor_geom=tumor_geom, distance_px=distance_px
             )
@@ -223,10 +224,10 @@ def run_spatial_analysis(
             # microenvironment. But here, we take all of the CELLS in the
             # microenvironment. It's much easier to implement this, so let's roll with
             # it.
-            cells_in_microenv = (
+            cells_in_microenv = [
                 cell for cell in cells if tumor_microenv.contains(cell.polygon)
-            )
-            for cell in cells_in_microenv:
+            ]
+            for cell in tqdm(cells_in_microenv):
                 row_generator = _distances_for_cell_in_microenv(
                     cell=cell,
                     marker_positive_geom=marker_positive_geom,
