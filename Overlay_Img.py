@@ -6,7 +6,7 @@ import random
 import matplotlib.pyplot as plt
 import shapely.wkt
 
-data_root = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Micro_Env_Data/Data")
+data_root = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/Div_Data/")
 patch_paths = list(data_root.glob("*.npy"))
 json_paths = list(data_root.glob("*.json"))
 
@@ -16,18 +16,18 @@ loader = tm.LoaderV1(
     background=0, 
     marker_positive=1, 
     marker_negative=7,
-    marker_neg_thresh=0.3,
+    marker_neg_thresh=0.9,
 )
 patches, cells = loader()
 
-# cells = [c for c in cells if c.cell_type in {"cd3", "cd4", "cd8", "cd16", "cd163"}]
+cells = [c for c in cells if c.cell_type in {"cd3", "cd4", "cd8", "cd16", "cd163"}]
 
-# tm.run_spatial_analysis(
-#     patches, 
-#     cells, 
-#     microenv_distances=[100], 
-#     mpp=0.34622,
-#     output_path="output.csv")
+tm.run_spatial_analysis(
+    patches, 
+    cells, 
+    microenv_distances=[100], 
+    mpp=0.34622,
+    output_path="output.csv")
 
 def gen_random_point_per_cell(points_data):
     for uuid, g in itertools.groupby(points_data, lambda p: p.cell_uuid):
@@ -45,7 +45,7 @@ image = cv2.imread('merged_image.png')
 for patch in patches:
     x = int(patch.polygon.exterior.xy[0][3]) - 35917
     y = int(patch.polygon.exterior.xy[1][3]) - 23945
-    top_left, bottom_right = (x,y), (x+146,y+146)
+    top_left, bottom_right = (x,y), (x+73,y+73)
     thickness = 5
     if patch.biomarker_status.value == 1:
         color = (19, 69, 139) #(139, 69, 19) 
@@ -69,6 +69,5 @@ for point_data in random_points_per_cell:
     image = cv2.circle(image, point, 3, point_color, -1)
     image = cv2.line(image, line_to_pos_start, line_to_pos_end, pos_line_color, 1)
     image = cv2.line(image, line_to_neg_start, line_to_neg_end, neg_line_color, 1)
-    print(i)
 
-cv2.imwrite('overlayed_full.png',image)
+cv2.imwrite('overlayed_full_25.png',image)
