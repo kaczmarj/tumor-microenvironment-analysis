@@ -29,6 +29,7 @@ import enum
 import itertools
 import json
 from pathlib import Path
+import random
 import typing as ty
 import uuid
 
@@ -43,7 +44,7 @@ from shapely.ops import nearest_points
 from shapely.ops import unary_union
 from tqdm import tqdm
 
-PathType = ty.Union[str, bytes, Path]
+PathType = ty.Union[str, Path]
 
 
 class PatchType(enum.IntEnum):
@@ -403,31 +404,101 @@ def read_point_csv(path: PathType) -> ty.List[PointOutputData]:
         return [PointOutputData._make(r) for r in reader]
 
 
-def plot_point_data_and_tumor(
-    patches: Patches, points_data: ty.Sequence[PointOutputData]
+def overlay_patches_and_points(
+    image_path: PathType,
+    patches: Patches,
+    points_data: PointOutputData,
+    xoff: int = -35917,
+    yoff: int = -23945,
+    output_path: PathType = "overlay.png",
 ):
-    """Instead of being an extensible plotting function, this is implemented as an
-    example of plotting our data.
-    """
-    import matplotlib.pyplot as plt
+    import cv2
+    from shapely.affinity import translate
     import shapely.wkt
 
-    colors = {
-        BiomarkerStatus.NA: "white",
-        BiomarkerStatus.POSITIVE: "brown",
-        BiomarkerStatus.NEGATIVE: "cyan",
+    color_negative = (255, 255, 0)  # cyan (bgr)
+    color_positive = (42, 42, 165)  # brown (bgr)
+
+    image = cv2.imread(str(image_path))
+    if image is None:
+        raise RuntimeError(f"error loading image: {image_path}")
+    marker_positive_patches = (
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
+    )
+    marker_negative_patches = (
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
+    )
+    marker_positive_geom = unary_union(list(marker_positive_patches))
+    marker_negative_geom = unary_union(list(marker_negative_patches))
+    # Translate so we are in same coordinate space as image.
+    marker_positive_geom = translate(marker_positive_geom, xoff=xoff, yoff=yoff)
+    marker_negative_geom = translate(marker_negative_geom, xoff=xoff, yoff=yoff)
+
+    for geom in marker_positive_geom.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_positive,
+            thickness=5,
+        )
+
+    for geom in marker_negative_geom.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_negative,
+            thickness=5,
+        )
+
+    def gen_random_point_per_cell(points_data):
+        for _, g in itertools.groupby(points_data, lambda p: p.cell_uuid):
+            yield random.choice(list(g))
+
+    random_points_per_cell = list(gen_random_point_per_cell(points_data))
+    stain_to_color = {
+        "cd8": (255, 0, 255),
+        "cd16": (0, 255, 255),
+        "cd4": (0, 0, 0),
+        "cd3": (0, 0, 255),
+        "cd163": (0, 255, 0),
     }
-    for patch in patches:
-        # Plot tumor patches.
-        if patch.patch_type == PatchType.TUMOR:
-            plt.fill(*patch.polygon.exterior.xy, color=colors[patch.biomarker_status])
-        # Plot the point we are interested in.
-    for point_data in points_data:
+
+    for point_data in random_points_per_cell:
         point = shapely.wkt.loads(point_data.point)
-        plt.plot(point.x, point.y, color="black", marker="o")
-        # Plot line to the nearest marker-positive region.
+        point = translate(point, xoff=xoff, yoff=yoff)
+        point = int(point.x), int(point.y)
         line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
-        plt.plot(*line_to_pos.xy, color="brown", linestyle="--")
-        # Plot line to the nearest marker-negative region.
+        line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
+        line_to_pos_start = (
+            int(line_to_pos.coords.xy[0][0]),
+            int(line_to_pos.coords.xy[1][0]),
+        )
+        line_to_pos_end = (
+            int(line_to_pos.coords.xy[0][1]),
+            int(line_to_pos.coords.xy[1][1]),
+        )
         line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
-        plt.plot(*line_to_neg.xy, color="cyan", linestyle="--")
+        line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
+        line_to_neg_start = (
+            int(line_to_neg.coords.xy[0][0]),
+            int(line_to_neg.coords.xy[1][0]),
+        )
+        line_to_neg_end = (
+            int(line_to_neg.coords.xy[0][1]),
+            int(line_to_neg.coords.xy[1][1]),
+        )
+        point_color = stain_to_color[point_data.cell_type]
+        image = cv2.circle(image, point, 3, point_color, -1)
+        image = cv2.line(
+            image, line_to_pos_start, line_to_pos_end, color=color_positive, thickness=1
+        )
+        image = cv2.line(
+            image, line_to_neg_start, line_to_neg_end, color=color_negative, thickness=1
+        )
+
+    if not cv2.imwrite(str(output_path), image):
+        raise RuntimeError(f"error saving image to {output_path}")
