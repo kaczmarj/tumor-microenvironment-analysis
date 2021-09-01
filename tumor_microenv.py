@@ -207,9 +207,9 @@ def run_spatial_analysis(
     del marker_positive_patches, marker_negative_patches
 
     # Polygons of blank tiles, so we can exclude cells in these regions.
-    blank_tiles = unary_union(
-        [p.polygon for p in patches if p.patch_type == PatchType.BLANK]
-    )
+    # blank_tiles = unary_union(
+    #     [p.polygon for p in patches if p.patch_type == PatchType.BLANK]
+    # )
 
     with open(output_path, "w", newline="") as output_csv:
         dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
@@ -227,15 +227,16 @@ def run_spatial_analysis(
             # microenvironment. But here, we take all of the CELLS in the
             # microenvironment. It's much easier to implement this, so let's roll with
             # it.
-            print(
-                "Finding cells that are inside the tumor microenvironment and not in"
-                " blank tiles ..."
-            )
+            # TODO: another way of finding cells that are near tumor is to query whether
+            # the distance of each cell is less than our tumor microenvironment. This
+            # would probably be better than buffering, because the buffer function
+            # seems to introduce some artifacts.
+            print("Filtering cells...")
             cells_in_microenv = [
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
-                and not blank_tiles.intersects(cell.polygon)
+                # and not blank_tiles.intersects(cell.polygon)
             ]
             for cell in tqdm(cells_in_microenv):
                 row_generator = _distances_for_cell_in_microenv(
@@ -280,6 +281,16 @@ class LoaderV1(BaseLoader):
     We have numpy files (.npy) with segmentation results and a JSON file with data about
     cells.
 
+    Classes
+    -------
+    1 : k17 positive
+    2 : cd8
+    3 : cd16
+    4 : cd4
+    5 : cd3
+    6 : cd163
+    7 : k17 negative
+
     Assumptions
     -----------
     - .npy files are named `MINX_MINY_COLS_ROWS.EXT`.
@@ -296,14 +307,12 @@ class LoaderV1(BaseLoader):
         background: int,
         marker_positive: int,
         marker_negative: int,
-        marker_neg_thresh: float = 0.3,
     ):
         self.patch_paths = patch_paths
         self.cells_json = cells_json
         self.background = background
         self.marker_positive = marker_positive
         self.marker_negative = marker_negative
-        self.marker_neg_thresh = marker_neg_thresh
 
     @staticmethod
     def _path_to_polygon(path) -> Polygon:
@@ -325,19 +334,21 @@ class LoaderV1(BaseLoader):
         marker_pos_mask = patch == self.marker_positive
         marker_neg_mask = patch == self.marker_negative
         tumor_mask = np.logical_or(marker_pos_mask, marker_neg_mask)
-        blank_mask = patch == self.background
         percent_tumor = tumor_mask.mean()
-        percent_blank = blank_mask.mean()
-        if percent_tumor > 0.5:
+        nonbackground_mask = patch != self.background
+        percent_nonbackground = nonbackground_mask.mean()
+        # The tumor threshold came from Ken Shroyer on August 27 2021.
+        if percent_tumor > 0.30:
             n_tumor_points = tumor_mask.sum()
-            if marker_neg_mask.sum() / n_tumor_points > self.marker_neg_thresh:
-                return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
-            else:
+            # This marker positive threshold came from Ken Shroyer on Aug 27 2021.
+            if marker_pos_mask.sum() / n_tumor_points > 0.10:
                 return PatchType.TUMOR, BiomarkerStatus.POSITIVE
-        elif percent_blank > 0.5:
-            return PatchType.BLANK, BiomarkerStatus.NA
-        else:
+            else:
+                return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
+        elif percent_nonbackground > 0.01:
             return PatchType.NONTUMOR, BiomarkerStatus.NA
+        else:
+            return PatchType.BLANK, BiomarkerStatus.NA
 
     def _npy_file_to_patch_object(self, path: PathType) -> Patch:
         """Create a Patch object from a NPY file of segmentation results."""
