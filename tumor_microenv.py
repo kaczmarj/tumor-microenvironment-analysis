@@ -34,8 +34,10 @@ import typing as ty
 import uuid
 
 import numpy as np
+from shapely.geometry import base as _base_geometry
 from shapely.geometry import box as box_constructor
 from shapely.geometry import LineString
+from shapely.geometry import MultiLineString
 from shapely.geometry import MultiPoint
 from shapely.geometry import MultiPolygon
 from shapely.geometry import Point
@@ -108,17 +110,10 @@ class PointOutputData(ty.NamedTuple):
     microenv_micrometer: int
 
 
-def _get_tumor_microenvironment(
-    tumor_geom: MultiPolygon, distance_px: int
-) -> MultiPolygon:
-    """Return a dilated MultiPolygon of tumors, representing the microenvironment at a
-    given distance (in pixels).
-    """
-    return tumor_geom.buffer(distance=distance_px)
-
-
 def _get_distances_for_point(
-    point: Point, positive_patches, negative_patches
+    point: Point,
+    positive_patches: _base_geometry.BaseGeometry,
+    negative_patches: _base_geometry.BaseGeometry,
 ) -> PosNegDistances:
     """Get the distances from the point to the nearest positive and negative patches."""
     dpos = point.distance(positive_patches)
@@ -127,7 +122,9 @@ def _get_distances_for_point(
 
 
 def _get_nearest_points_for_point(
-    point: Point, positive_patches, negative_patches
+    point: Point,
+    positive_patches: _base_geometry.BaseGeometry,
+    negative_patches: _base_geometry.BaseGeometry,
 ) -> PosNegLines:
     """Get the lines joining the point to the nearest positive patch and the nearest
     negative patch.
@@ -139,10 +136,39 @@ def _get_nearest_points_for_point(
     return PosNegLines(line_to_positive=line_to_pos, line_to_negative=line_to_neg)
 
 
+def _get_exterior_of_multigeom(
+    multigeom: _base_geometry.BaseMultipartGeometry,
+) -> MultiLineString:
+    return MultiLineString([g.exterior for g in multigeom.geoms])
+
+
+def _exterior_to_multilinestring(
+    exterior: _base_geometry.BaseGeometry,
+) -> MultiLineString:
+    lines: ty.List[ty.Tuple[ty.Tuple[float, float], ty.Tuple[float, float]]] = []
+    for t in exterior:
+        lines.extend(zip(t.coords[:-1], t.coords[1:]))
+    return MultiLineString(lines)
+
+
+def _get_exterior_contained_in_larger_geom(
+    multigeom: _base_geometry.BaseMultipartGeometry,
+    larger_geom_exterior: MultiLineString,
+) -> MultiLineString:
+    """Get the exterior lines of `multigeom` that are contained in the exterior lines
+    of `larger_geom_exterior`.
+    """
+    exterior = _get_exterior_of_multigeom(multigeom)
+    lines = _exterior_to_multilinestring(exterior)
+    # Buffer just in case, so we definitely contain the line (?)
+    larger_geom_exterior = larger_geom_exterior.buffer(1)
+    return MultiLineString([g for g in lines if larger_geom_exterior.contains(g)])
+
+
 def _distances_for_cell_in_microenv(
     cell: Cell,
-    marker_positive_geom,
-    marker_negative_geom,
+    marker_positive_geom: _base_geometry.BaseGeometry,
+    marker_negative_geom: _base_geometry.BaseGeometry,
     microenv_micrometer: int,
 ) -> ty.Generator[PointOutputData, None, None]:
     """Yield distance information for one cell."""
@@ -171,6 +197,26 @@ def _distances_for_cell_in_microenv(
             cell_uuid=cell.uuid,
             microenv_micrometer=microenv_micrometer,
         )
+
+
+def get_exteriors(
+    tumor: _base_geometry.BaseMultipartGeometry,
+    biomarker_positive: _base_geometry.BaseGeometry,
+    biomarker_negative: _base_geometry.BaseGeometry,
+) -> ty.Dict[str, MultiLineString]:
+    """Get exteriors of tumor, biomarker-positive, and biomarker-negative polygons."""
+    tumor_exterior = _get_exterior_of_multigeom(tumor)
+    marker_positive_exterior = _get_exterior_contained_in_larger_geom(
+        biomarker_positive, tumor_exterior
+    )
+    marker_negative_exterior = _get_exterior_contained_in_larger_geom(
+        biomarker_negative, tumor_exterior
+    )
+    return dict(
+        tumor=tumor_exterior,
+        marker_positive=marker_positive_exterior,
+        marker_negative=marker_negative_exterior,
+    )
 
 
 def run_spatial_analysis(
@@ -208,6 +254,15 @@ def run_spatial_analysis(
     )
     marker_positive_geom = unary_union(list(marker_positive_patches))
     marker_negative_geom = unary_union(list(marker_negative_patches))
+
+    exteriors = get_exteriors(
+        tumor=tumor_geom,
+        biomarker_positive=marker_positive_geom,
+        biomarker_negative=marker_negative_geom,
+    )
+    tumor_exterior = exteriors["tumor"]
+    marker_positive_geom = exteriors["marker_positive"]
+    marker_negative_geom = exteriors["marker_negative"]
     del marker_positive_patches, marker_negative_patches
 
     # Polygons of blank tiles, so we can exclude cells in these regions.
@@ -222,9 +277,7 @@ def run_spatial_analysis(
         for distance_um in microenv_distances:
             distance_px = round(distance_um / mpp)
             print(f"Working on distance = {distance_um} um ({distance_px} px)")
-            tumor_microenv = _get_tumor_microenvironment(
-                tumor_geom=tumor_geom, distance_px=distance_px
-            )
+            tumor_microenv = tumor_exterior.buffer(distance=distance_px)
 
             # TODO: this is NOT the same as the method we discussed with Joel and
             # Mahmudul. We discussed getting all of the POINTS inside the
@@ -251,9 +304,9 @@ def run_spatial_analysis(
                 )
                 for row in row_generator:
                     # Only write the data if it is within our microenvironment.
-                    max_dist = max(row.dist_to_marker_pos, row.dist_to_marker_neg)
-                    if max_dist <= distance_px:
-                        dict_writer.writerow(row._asdict())
+                    # max_dist = max(row.dist_to_marker_pos, row.dist_to_marker_neg)
+                    # if max_dist <= distance_px:
+                    dict_writer.writerow(row._asdict())
 
 
 class BaseLoader:
@@ -341,11 +394,9 @@ class LoaderV1(BaseLoader):
         percent_tumor = tumor_mask.mean()
         nonbackground_mask = patch != self.background
         percent_nonbackground = nonbackground_mask.mean()
-        # The tumor threshold came from Ken Shroyer on August 27 2021.
-        if percent_tumor > 0.30:
+        if percent_tumor >= 0.05:
             n_tumor_points = tumor_mask.sum()
-            # This marker positive threshold came from Ken Shroyer on Aug 27 2021.
-            if marker_pos_mask.sum() / n_tumor_points > 0.10:
+            if marker_pos_mask.sum() / n_tumor_points >= 0.40:
                 return PatchType.TUMOR, BiomarkerStatus.POSITIVE
             else:
                 return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
