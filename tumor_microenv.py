@@ -391,11 +391,9 @@ class LoaderV1(BaseLoader):
         percent_tumor = tumor_mask.mean()
         nonbackground_mask = patch != self.background
         percent_nonbackground = nonbackground_mask.mean()
-        # The tumor threshold came from Ken Shroyer on August 27 2021.
-        if percent_tumor > 0.30:
+        if percent_tumor >= 0.05:
             n_tumor_points = tumor_mask.sum()
-            # This marker positive threshold came from Ken Shroyer on Aug 27 2021.
-            if marker_pos_mask.sum() / n_tumor_points > 0.10:
+            if marker_pos_mask.sum() / n_tumor_points >= 0.40:
                 return PatchType.TUMOR, BiomarkerStatus.POSITIVE
             else:
                 return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
