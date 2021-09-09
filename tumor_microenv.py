@@ -179,6 +179,7 @@ def run_spatial_analysis(
     microenv_distances: ty.Sequence[int],
     mpp: float,
     output_path: PathType = "output.csv",
+    progress_bar: bool = True,
 ):
     """Run spatial analysis workflow.
 
@@ -192,6 +193,8 @@ def run_spatial_analysis(
         Distances (in micrometers) to consider for tumor microenvironment.
     output_path : PathType
         Path to output CSV.
+    progress_bar : bool
+        Whether to show the progress bar.
     """
     # This is a multipolygon that represents the entire tumor in our region of interest.
     tumor_geom: MultiPolygon = unary_union(
@@ -239,7 +242,7 @@ def run_spatial_analysis(
                 if tumor_microenv.contains(cell.polygon)
                 # and not blank_tiles.intersects(cell.polygon)
             ]
-            for cell in tqdm(cells_in_microenv):
+            for cell in tqdm(cells_in_microenv, disable=not progress_bar):
                 row_generator = _distances_for_cell_in_microenv(
                     cell=cell,
                     marker_positive_geom=marker_positive_geom,
@@ -502,3 +505,180 @@ def overlay_patches_and_points(
 
     if not cv2.imwrite(str(output_path), image):
         raise RuntimeError(f"error saving image to {output_path}")
+
+
+def get_npy_and_json_files_for_roi(
+    xmin: int,
+    ymin: int,
+    patch_size: int,
+    analysis_size: int,
+    tumor_microenv: int,
+    data_root: PathType,
+) -> ty.Tuple[ty.List[Path], ty.List[Path]]:
+    """
+    Get the paths to cells and the paths to npy patches that are within `tumor_microenv`
+    pixels to the borders.
+
+    Paramters
+    ---------
+    xmin, ymin : int
+        Coordinates of the upper-left corner of the patch.
+    patch_size : int
+        Size of each patch in pixels. We assume patches are square.
+    analysis_size : int
+        Size of region (pixels) in which we consider cells. This is square.
+    tumor_microenv : int
+        Distance of tumor microenvironment in pixels.
+    data_root : PathType
+        Directory containing npy and json files.
+
+    Returns
+    -------
+    Tuple of patch paths and cell (json) paths that are relevant for this ROI.
+    """
+    import math
+
+    actual_analysis_size = patch_size * math.ceil(analysis_size / patch_size)
+    actual_tumor_microenv = patch_size * math.ceil(tumor_microenv / patch_size)
+    print(f"setting analysis_size={actual_analysis_size} (original {analysis_size})")
+    print(f"setting tumor_microenv={actual_tumor_microenv} (original {tumor_microenv})")
+    del analysis_size, tumor_microenv
+    patches_right = patches_down = math.ceil(actual_analysis_size / patch_size)
+
+    # These are the x and y coordinates of the upper-left corner of each patch in the
+    # analysis region (ie the area from which we take cells).
+    xs = [xmin + patch_size * i for i in range(patches_right)]
+    ys = [ymin + patch_size * i for i in range(patches_down)]
+
+    n_patches_for_tumor_env = math.ceil(actual_tumor_microenv / patch_size)
+
+    left_x = [xs[0] + patch_size * i for i in range(-n_patches_for_tumor_env, 0)]
+    left_y = [
+        ys[0] + patch_size * i
+        for i in range(-n_patches_for_tumor_env, patches_down + n_patches_for_tumor_env)
+    ]
+
+    right_x = [
+        xs[-1] + patch_size * i
+        for i in range(patches_right, patches_right + n_patches_for_tumor_env)
+    ]
+    right_y = [
+        ys[0] + patch_size * i
+        for i in range(-n_patches_for_tumor_env, patches_down + n_patches_for_tumor_env)
+    ]
+
+    top_x = [
+        xs[0] + patch_size * i
+        for i in range(
+            -n_patches_for_tumor_env, patches_right + n_patches_for_tumor_env
+        )
+    ]
+    top_y = [ys[0] + patch_size * i for i in range(-n_patches_for_tumor_env, 0)]
+
+    bottom_x = [
+        xs[0] + patch_size * i
+        for i in range(
+            -n_patches_for_tumor_env, patches_right + n_patches_for_tumor_env
+        )
+    ]
+    bottom_y = [
+        ys[-1] + patch_size * i
+        for i in range(patches_down, patches_down + n_patches_for_tumor_env)
+    ]
+
+    assert top_x == bottom_x and left_y == right_y
+
+    # Pad on both sides
+    total_size = actual_analysis_size + 2 * actual_tumor_microenv
+    # Check that our border coordinates make sense...
+    # X coordinates
+    assert total_size == top_x[-1] + patch_size - top_x[0], "top_x wrong"
+    assert (
+        actual_tumor_microenv == right_x[-1] + patch_size - right_x[0]
+    ), "right_x wrong"
+    assert total_size == bottom_x[-1] + patch_size - bottom_x[0], "bottom_x wrong"
+    assert actual_tumor_microenv == left_x[-1] + patch_size - left_x[0], "left_x wrong"
+    # Y coordinates
+    assert actual_tumor_microenv == top_y[-1] + patch_size - top_y[0], "top_y wrong"
+    assert total_size == right_y[-1] + patch_size - right_y[0], "right_y wrong"
+    assert (
+        actual_tumor_microenv == bottom_y[-1] + patch_size - bottom_y[0]
+    ), "bottom_y wrong"
+    assert total_size == left_y[-1] + patch_size - left_y[0], "left_y wrong"
+
+    def coords_to_paths(
+        xs,
+        ys,
+        patch_size: int,
+        extension: str,
+        parent: PathType = None,
+    ) -> ty.List[Path]:
+        """Convert coordinates to a path."""
+        x_y_coords = itertools.product(xs, ys)
+        paths = [
+            Path(f"{x}_{y}_{patch_size}_{patch_size}.{extension}")
+            for x, y in x_y_coords
+        ]
+        if parent is not None:
+            parent = Path(parent)
+            paths = [parent / p for p in paths]
+        return paths
+
+    # Patches that overlap with cells we consider.
+    patches_in_roi = coords_to_paths(
+        xs, ys, patch_size=patch_size, extension="npy", parent=data_root
+    )
+    if not all(p.exists() for p in patches_in_roi):
+        raise FileNotFoundError("some central patches do not exist")
+
+    top_patches = coords_to_paths(
+        top_x, top_y, patch_size=patch_size, extension="npy", parent=data_root
+    )
+    right_patches = coords_to_paths(
+        right_x, right_y, patch_size=patch_size, extension="npy", parent=data_root
+    )
+    bottom_patches = coords_to_paths(
+        bottom_x, bottom_y, patch_size=patch_size, extension="npy", parent=data_root
+    )
+    left_patches = coords_to_paths(
+        left_x, left_y, patch_size=patch_size, extension="npy", parent=data_root
+    )
+
+    all_top_patches_exist = all(p.exists() for p in top_patches)
+    all_right_patches_exist = all(p.exists() for p in right_patches)
+    all_bottom_patches_exist = all(p.exists() for p in bottom_patches)
+    all_left_patches_exist = all(p.exists() for p in left_patches)
+
+    # Some scenarios should never happen.
+    # TODO: we need to fix this... at upper-left corner, for example, not all of the
+    # right-most patches will exist. Specifically the top patches at the right won't
+    # exist.
+    # if not all_left_patches_exist and not all_right_patches_exist:
+    #     raise FileNotFoundError("some left and right patches do not exist")
+    # if not all_top_patches_exist and not all_bottom_patches_exist:
+    #     raise FileNotFoundError("some top and bottom patches do not exist")
+
+    # At corners, some patches will not exist.
+    if not all_top_patches_exist and not all_left_patches_exist:
+        print("upper-left corner")
+    elif not all_top_patches_exist and not all_right_patches_exist:
+        print("upper-right corner")
+    elif not all_bottom_patches_exist and not all_left_patches_exist:
+        print("bottom-left corner")
+    elif not all_bottom_patches_exist and not all_right_patches_exist:
+        print("bottom-right corner")
+
+    border_patches = top_patches + right_patches + bottom_patches + left_patches
+    # We have some duplicates because the corners overlap.
+    border_patches = list(set(border_patches))
+
+    # We can safely filter nonexistent patches here because we checked if nonexistent
+    # patches made sense.
+    border_patches = [p for p in border_patches if p.exists()]
+    patches_in_roi.extend(border_patches)
+
+    jsons_in_roi = coords_to_paths(
+        xs, ys, patch_size=patch_size, extension="json", parent=data_root
+    )
+
+    return patches_in_roi, jsons_in_roi
