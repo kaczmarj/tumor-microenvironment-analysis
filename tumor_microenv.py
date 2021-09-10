@@ -297,7 +297,7 @@ def run_spatial_analysis(
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
-                # and not blank_tiles.intersects(cell.polygon)
+                and not tumor_geom.contains(cell.polygon)
             ]
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
                 row_generator = _distances_for_cell_in_microenv(
