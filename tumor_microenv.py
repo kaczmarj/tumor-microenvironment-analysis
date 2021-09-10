@@ -149,7 +149,7 @@ def _get_exterior_of_geom(
 
 
 def _exterior_to_multilinestring(
-    exterior: _base_geometry.BaseGeometry,
+    exterior: MultiLineString,
 ) -> MultiLineString:
     lines: ty.List[ty.Tuple[ty.Tuple[float, float], ty.Tuple[float, float]]] = []
     for t in exterior:
