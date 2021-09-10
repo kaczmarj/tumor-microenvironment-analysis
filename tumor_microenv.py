@@ -63,19 +63,21 @@ class BiomarkerStatus(enum.IntEnum):
 
 
 class Patch(ty.NamedTuple):
-    polygon: Polygon
+    polygon: _base_geometry.BaseGeometry
     patch_type: PatchType
     biomarker_status: BiomarkerStatus
 
 
 class Cell(ty.NamedTuple):
-    polygon: Polygon
+    polygon: _base_geometry.BaseGeometry
     cell_type: str
     uuid: str
 
     @property
     def lattice_points(self) -> MultiPoint:
         """Lattice points of the polygon (all integer points that make up polygon)."""
+        if isinstance(self.polygon, Point):
+            return MultiPoint([self.polygon])
         # convert values to int
         xmin, ymin, xmax, ymax = map(round, self.polygon.bounds)
         coords = itertools.product(range(xmin, xmax + 1), range(ymin, ymax + 1))
