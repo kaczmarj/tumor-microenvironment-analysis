@@ -895,3 +895,97 @@ def cv2_add_patch_exteriors(
         )
 
     return image
+
+
+def gen_random_point_per_cell(
+    points_data: ty.List[PointOutputData],
+) -> ty.Generator[PointOutputData, None, None]:
+    """Yield a random point in each cell."""
+    for _, g in itertools.groupby(points_data, lambda p: p.cell_uuid):
+        yield random.choice(list(g))
+
+
+def cv2_add_cell_points(
+    image: np.ndarray,
+    points_data: ty.Iterable[PointOutputData],
+    xoff: int = -35917,
+    yoff: int = -23945,
+    cell_radius: int = 3,
+    color_mapping: ty.Dict[str, ty.Tuple[int, int, int]] = None,
+) -> np.ndarray:
+    """Add cell points to an image."""
+    import cv2
+    from shapely.affinity import translate
+    import shapely.wkt
+
+    stain_to_color = {
+        "cd8": (255, 0, 255),
+        "cd16": (0, 255, 255),
+        "cd4": (0, 0, 0),
+        "cd3": (0, 0, 255),
+        "cd163": (0, 255, 0),
+    }
+    if color_mapping is not None:
+        stain_to_color.update(color_mapping)
+
+    for point_data in points_data:
+        point = shapely.wkt.loads(point_data.point)
+        point = translate(point, xoff=xoff, yoff=yoff)
+        point = int(point.x), int(point.y)
+        point_color = stain_to_color[point_data.cell_type]
+        image = cv2.circle(
+            image, center=point, radius=cell_radius, color=point_color, thickness=-1
+        )
+    return image
+
+
+def cv2_add_cell_distance_lines(
+    image: np.ndarray,
+    points_data: ty.Iterable[PointOutputData],
+    xoff: int = -35917,
+    yoff: int = -23945,
+    color_negative: ty.Tuple[int, int, int] = (255, 255, 0),
+    color_positive: ty.Tuple[int, int, int] = (42, 42, 165),
+    line_thickness: int = 5,
+) -> np.ndarray:
+    """Add cell distance lines to an image."""
+    import cv2
+    from shapely.affinity import translate
+    import shapely.wkt
+
+    for point_data in points_data:
+        line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
+        line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
+        line_to_pos_start = (
+            int(line_to_pos.coords.xy[0][0]),
+            int(line_to_pos.coords.xy[1][0]),
+        )
+        line_to_pos_end = (
+            int(line_to_pos.coords.xy[0][1]),
+            int(line_to_pos.coords.xy[1][1]),
+        )
+        line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
+        line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
+        line_to_neg_start = (
+            int(line_to_neg.coords.xy[0][0]),
+            int(line_to_neg.coords.xy[1][0]),
+        )
+        line_to_neg_end = (
+            int(line_to_neg.coords.xy[0][1]),
+            int(line_to_neg.coords.xy[1][1]),
+        )
+        image = cv2.line(
+            image,
+            line_to_pos_start,
+            line_to_pos_end,
+            color=color_positive,
+            thickness=line_thickness,
+        )
+        image = cv2.line(
+            image,
+            line_to_neg_start,
+            line_to_neg_end,
+            color=color_negative,
+            thickness=line_thickness,
+        )
+    return image
