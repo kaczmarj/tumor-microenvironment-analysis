@@ -898,9 +898,10 @@ def cv2_add_patch_exteriors(
 
 
 def gen_random_point_per_cell(
-    points_data: ty.List[PointOutputData],
+    points_data: ty.List[PointOutputData], seed: int = None
 ) -> ty.Generator[PointOutputData, None, None]:
     """Yield a random point in each cell."""
+    random.seed(seed)
     for _, g in itertools.groupby(points_data, lambda p: p.cell_uuid):
         yield random.choice(list(g))
 
