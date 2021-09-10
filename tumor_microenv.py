@@ -36,6 +36,7 @@ import uuid
 import numpy as np
 from shapely.geometry import base as _base_geometry
 from shapely.geometry import box as box_constructor
+from shapely.geometry import GeometryCollection
 from shapely.geometry import LineString
 from shapely.geometry import MultiLineString
 from shapely.geometry import MultiPoint
@@ -136,10 +137,13 @@ def _get_nearest_points_for_point(
     return PosNegLines(line_to_positive=line_to_pos, line_to_negative=line_to_neg)
 
 
-def _get_exterior_of_multigeom(
-    multigeom: _base_geometry.BaseMultipartGeometry,
+def _get_exterior_of_geom(
+    geom: ty.Union[Polygon, MultiPolygon, GeometryCollection],
 ) -> MultiLineString:
-    return MultiLineString([g.exterior for g in multigeom.geoms])
+    if hasattr(geom, "geoms"):
+        return MultiLineString([g.exterior for g in geom.geoms])
+    else:
+        return MultiLineString([geom.exterior])
 
 
 def _exterior_to_multilinestring(
@@ -158,7 +162,7 @@ def _get_exterior_contained_in_larger_geom(
     """Get the exterior lines of `multigeom` that are contained in the exterior lines
     of `larger_geom_exterior`.
     """
-    exterior = _get_exterior_of_multigeom(multigeom)
+    exterior = _get_exterior_of_geom(multigeom)
     lines = _exterior_to_multilinestring(exterior)
     # Buffer just in case, so we definitely contain the line (?)
     larger_geom_exterior = larger_geom_exterior.buffer(1)
@@ -205,7 +209,7 @@ def get_exteriors(
     biomarker_negative: _base_geometry.BaseGeometry,
 ) -> ty.Dict[str, MultiLineString]:
     """Get exteriors of tumor, biomarker-positive, and biomarker-negative polygons."""
-    tumor_exterior = _get_exterior_of_multigeom(tumor)
+    tumor_exterior = _get_exterior_of_geom(tumor)
     marker_positive_exterior = _get_exterior_contained_in_larger_geom(
         biomarker_positive, tumor_exterior
     )
@@ -303,10 +307,10 @@ def run_spatial_analysis(
                     microenv_micrometer=distance_um,
                 )
                 for row in row_generator:
-                    # Only write the data if it is within our microenvironment.
-                    # max_dist = max(row.dist_to_marker_pos, row.dist_to_marker_neg)
-                    # if max_dist <= distance_px:
-                    dict_writer.writerow(row._asdict())
+                    # Only write the data if part of it is within our microenvironment.
+                    min_dist = min(row.dist_to_marker_pos, row.dist_to_marker_neg)
+                    if min_dist <= distance_px:
+                        dict_writer.writerow(row._asdict())
 
 
 class BaseLoader:
@@ -461,7 +465,7 @@ def read_point_csv(path: PathType) -> ty.List[PointOutputData]:
 def overlay_patches_and_points(
     image_path: PathType,
     patches: Patches,
-    points_data: PointOutputData,
+    points_data: ty.List[PointOutputData],
     xoff: int = -35917,
     yoff: int = -23945,
     output_path: PathType = "overlay.png",
@@ -609,10 +613,7 @@ def get_npy_and_json_files_for_roi(
         for i in range(-n_patches_for_tumor_env, patches_down + n_patches_for_tumor_env)
     ]
 
-    right_x = [
-        xs[-1] + patch_size * i
-        for i in range(patches_right, patches_right + n_patches_for_tumor_env)
-    ]
+    right_x = [xs[-1] + patch_size * i for i in range(n_patches_for_tumor_env)]
     right_y = [
         ys[0] + patch_size * i
         for i in range(-n_patches_for_tumor_env, patches_down + n_patches_for_tumor_env)
@@ -632,10 +633,7 @@ def get_npy_and_json_files_for_roi(
             -n_patches_for_tumor_env, patches_right + n_patches_for_tumor_env
         )
     ]
-    bottom_y = [
-        ys[-1] + patch_size * i
-        for i in range(patches_down, patches_down + n_patches_for_tumor_env)
-    ]
+    bottom_y = [ys[-1] + patch_size * i for i in range(n_patches_for_tumor_env)]
 
     assert top_x == bottom_x and left_y == right_y
 
@@ -733,3 +731,104 @@ def get_npy_and_json_files_for_roi(
     )
 
     return patches_in_roi, jsons_in_roi
+
+
+def overlay_patch_edges_and_optionally_points(
+    image_path: PathType,
+    patches: Patches,
+    points_data: ty.Sequence[PointOutputData] = None,
+    xoff: int = -35917,
+    yoff: int = -23945,
+    output_path: PathType = "overlay-edges.png",
+):
+    import cv2
+    from shapely.affinity import translate
+    import shapely.wkt
+
+    if points_data is None:
+        points_data = []
+
+    tum_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    pos_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
+    ]
+    neg_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
+    ]
+
+    tum_patches = unary_union(tum_patches)
+    pos_patches = unary_union(pos_patches)
+    neg_patches = unary_union(neg_patches)
+
+    tum_patches = translate(tum_patches, xoff=xoff, yoff=yoff)
+    pos_patches = translate(pos_patches, xoff=xoff, yoff=yoff)
+    neg_patches = translate(neg_patches, xoff=xoff, yoff=yoff)
+
+    exts = get_exteriors(tum_patches, pos_patches, neg_patches)
+
+    image = cv2.imread(str(image_path))
+    if image is None:
+        raise RuntimeError(f"error loading image: {image_path}")
+
+    color_negative = (255, 255, 0)  # cyan (bgr)
+    color_positive = (42, 42, 165)  # brown (bgr)
+
+    for line in exts["marker_negative"]:
+        coords = list(zip(*line.xy))
+        assert len(coords) == 2
+        coords = [(int(x), int(y)) for x, y in coords]
+        image = cv2.line(image, coords[0], coords[1], color_negative, thickness=5)
+
+    for line in exts["marker_positive"]:
+        coords = list(zip(*line.xy))
+        assert len(coords) == 2
+        coords = [(int(x), int(y)) for x, y in coords]
+        image = cv2.line(image, coords[0], coords[1], color_positive, thickness=5)
+
+    def gen_random_point_per_cell(points_data):
+        for _, g in itertools.groupby(points_data, lambda p: p.cell_uuid):
+            yield random.choice(list(g))
+
+    random_points_per_cell = list(gen_random_point_per_cell(points_data))
+    stain_to_color = {
+        "cd8": (255, 0, 255),
+        "cd16": (0, 255, 255),
+        "cd4": (0, 0, 0),
+        "cd3": (0, 0, 255),
+        "cd163": (0, 255, 0),
+    }
+
+    for point_data in random_points_per_cell:
+        point = shapely.wkt.loads(point_data.point)
+        point = translate(point, xoff=xoff, yoff=yoff)
+        point = int(point.x), int(point.y)
+        line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
+        line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
+        line_to_pos_start = (
+            int(line_to_pos.coords.xy[0][0]),
+            int(line_to_pos.coords.xy[1][0]),
+        )
+        line_to_pos_end = (
+            int(line_to_pos.coords.xy[0][1]),
+            int(line_to_pos.coords.xy[1][1]),
+        )
+        line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
+        line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
+        line_to_neg_start = (
+            int(line_to_neg.coords.xy[0][0]),
+            int(line_to_neg.coords.xy[1][0]),
+        )
+        line_to_neg_end = (
+            int(line_to_neg.coords.xy[0][1]),
+            int(line_to_neg.coords.xy[1][1]),
+        )
+        point_color = stain_to_color[point_data.cell_type]
+        image = cv2.circle(image, point, 3, point_color, -1)
+        image = cv2.line(
+            image, line_to_pos_start, line_to_pos_end, color=color_positive, thickness=1
+        )
+        image = cv2.line(
+            image, line_to_neg_start, line_to_neg_end, color=color_negative, thickness=1
+        )
+
+    assert cv2.imwrite(output_path, image), "failed saving image"
