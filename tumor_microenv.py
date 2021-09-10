@@ -832,3 +832,66 @@ def overlay_patch_edges_and_optionally_points(
         )
 
     assert cv2.imwrite(output_path, image), "failed saving image"
+
+
+def cv2_add_patch_exteriors(
+    image: np.ndarray,
+    patches: Patches,
+    xoff: int = -35917,
+    yoff: int = -23945,
+    color_negative: ty.Tuple[int, int, int] = (255, 255, 0),
+    color_positive: ty.Tuple[int, int, int] = (42, 42, 165),
+    line_thickness: int = 5,
+) -> np.ndarray:
+    """Add exterior of patches to an image.
+
+    Negative is cyan by default. Positive is brown by default.
+    """
+    import cv2
+    from shapely.affinity import translate
+
+    tum_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    pos_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
+    ]
+    neg_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
+    ]
+
+    tum_patches = unary_union(tum_patches)
+    pos_patches = unary_union(pos_patches)
+    neg_patches = unary_union(neg_patches)
+
+    tum_patches = translate(tum_patches, xoff=xoff, yoff=yoff)
+    pos_patches = translate(pos_patches, xoff=xoff, yoff=yoff)
+    neg_patches = translate(neg_patches, xoff=xoff, yoff=yoff)
+    exts = get_exteriors(tum_patches, pos_patches, neg_patches)
+
+    color_negative = (255, 255, 0)  # cyan (bgr)
+    color_positive = (42, 42, 165)  # brown (bgr)
+
+    for line in exts["marker_negative"]:
+        coords = list(zip(*line.xy))
+        assert len(coords) == 2
+        coords = [(int(x), int(y)) for x, y in coords]
+        image = cv2.line(
+            image,
+            coords[0],
+            coords[1],
+            color_negative,
+            thickness=line_thickness,
+        )
+
+    for line in exts["marker_positive"]:
+        coords = list(zip(*line.xy))
+        assert len(coords) == 2
+        coords = [(int(x), int(y)) for x, y in coords]
+        image = cv2.line(
+            image,
+            coords[0],
+            coords[1],
+            color_positive,
+            thickness=line_thickness,
+        )
+
+    return image
