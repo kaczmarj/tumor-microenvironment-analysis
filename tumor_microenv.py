@@ -91,51 +91,61 @@ Cells = ty.List[Cell]
 
 
 class PosNegDistances(ty.NamedTuple):
-    dpositive: float
-    dnegative: float
+    # In some cases, a biomarker-negative or -positive region might be so far away
+    # that we exclude that distance. In those cases, the distance would be None.
+    dpositive: ty.Optional[float] = None
+    dnegative: ty.Optional[float] = None
 
 
 class PosNegLines(ty.NamedTuple):
-    line_to_positive: LineString
-    line_to_negative: LineString
+    # See comment in PosNegDistances regarding None values.
+    line_to_positive: ty.Optional[LineString] = None
+    line_to_negative: ty.Optional[LineString] = None
 
 
 class PointOutputData(ty.NamedTuple):
     """Object representing one row in the output file."""
 
     point: str
-    dist_to_marker_neg: float
-    dist_to_marker_pos: float
-    line_to_marker_neg: str
-    line_to_marker_pos: str
     cell_type: str
     cell_uuid: str
     microenv_micrometer: int
+    # See comment in PosNegDistances regarding None values.
+    dist_to_marker_neg: ty.Optional[float] = None
+    dist_to_marker_pos: ty.Optional[float] = None
+    line_to_marker_neg: ty.Optional[str] = None
+    line_to_marker_pos: ty.Optional[str] = None
 
 
 def _get_distances_for_point(
     point: Point,
-    positive_patches: _base_geometry.BaseGeometry,
-    negative_patches: _base_geometry.BaseGeometry,
+    positive_geom: ty.Union[_base_geometry.BaseGeometry, None],
+    negative_geom: ty.Union[_base_geometry.BaseGeometry, None],
 ) -> PosNegDistances:
     """Get the distances from the point to the nearest positive and negative patches."""
-    dpos = point.distance(positive_patches)
-    dneg = point.distance(negative_patches)
+    dpos = point.distance(positive_geom) if positive_geom is not None else None
+    dneg = point.distance(negative_geom) if negative_geom is not None else None
     return PosNegDistances(dpositive=dpos, dnegative=dneg)
 
 
 def _get_nearest_points_for_point(
     point: Point,
-    positive_patches: _base_geometry.BaseGeometry,
-    negative_patches: _base_geometry.BaseGeometry,
+    positive_geom: ty.Union[_base_geometry.BaseGeometry, None],
+    negative_geom: ty.Union[_base_geometry.BaseGeometry, None],
 ) -> PosNegLines:
     """Get the lines joining the point to the nearest positive patch and the nearest
     negative patch.
     """
-    line_to_pos = nearest_points(point, positive_patches)
-    line_to_neg = nearest_points(point, negative_patches)
-    line_to_pos = LineString(line_to_pos)
-    line_to_neg = LineString(line_to_neg)
+    if positive_geom is not None:
+        line_to_pos = nearest_points(point, positive_geom)
+        line_to_pos = LineString(line_to_pos)
+    else:
+        line_to_pos = None
+    if negative_geom is not None:
+        line_to_neg = nearest_points(point, negative_geom)
+        line_to_neg = LineString(line_to_neg)
+    else:
+        line_to_neg = None
     return PosNegLines(line_to_positive=line_to_pos, line_to_negative=line_to_neg)
 
 
@@ -181,24 +191,34 @@ def _distances_for_cell_in_microenv(
     for cell_point in cell.lattice_points.geoms:
         distances = _get_distances_for_point(
             cell_point,
-            positive_patches=marker_positive_geom,
-            negative_patches=marker_negative_geom,
+            positive_geom=marker_positive_geom,
+            negative_geom=marker_negative_geom,
         )
         try:
             lines_from_point_to_patches = _get_nearest_points_for_point(
                 cell_point,
-                positive_patches=marker_positive_geom,
-                negative_patches=marker_negative_geom,
+                positive_geom=marker_positive_geom,
+                negative_geom=marker_negative_geom,
             )
         # Sometimes this can error... but why?
         except ValueError:
             continue
+
+        if lines_from_point_to_patches.line_to_negative is None:
+            line_to_marker_neg = None
+        else:
+            line_to_marker_neg = lines_from_point_to_patches.line_to_negative.wkt
+        if lines_from_point_to_patches.line_to_positive is None:
+            line_to_marker_pos = None
+        else:
+            line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
+
         yield PointOutputData(
             point=cell_point.wkt,
             dist_to_marker_neg=distances.dnegative,
             dist_to_marker_pos=distances.dpositive,
-            line_to_marker_neg=lines_from_point_to_patches.line_to_negative.wkt,
-            line_to_marker_pos=lines_from_point_to_patches.line_to_positive.wkt,
+            line_to_marker_neg=line_to_marker_neg,
+            line_to_marker_pos=line_to_marker_pos,
             cell_type=cell.cell_type,
             cell_uuid=cell.uuid,
             microenv_micrometer=microenv_micrometer,
@@ -207,17 +227,23 @@ def _distances_for_cell_in_microenv(
 
 def get_exteriors(
     tumor: _base_geometry.BaseMultipartGeometry,
-    biomarker_positive: _base_geometry.BaseGeometry,
-    biomarker_negative: _base_geometry.BaseGeometry,
-) -> ty.Dict[str, MultiLineString]:
+    biomarker_positive: ty.Union[_base_geometry.BaseGeometry, None],
+    biomarker_negative: ty.Union[_base_geometry.BaseGeometry, None],
+) -> ty.Dict[str, ty.Union[MultiLineString, None]]:
     """Get exteriors of tumor, biomarker-positive, and biomarker-negative polygons."""
     tumor_exterior = _get_exterior_of_geom(tumor)
-    marker_positive_exterior = _get_exterior_contained_in_larger_geom(
-        biomarker_positive, tumor_exterior
-    )
-    marker_negative_exterior = _get_exterior_contained_in_larger_geom(
-        biomarker_negative, tumor_exterior
-    )
+    if biomarker_positive is not None:
+        marker_positive_exterior = _get_exterior_contained_in_larger_geom(
+            biomarker_positive, tumor_exterior
+        )
+    else:
+        marker_positive_exterior = None
+    if biomarker_negative is not None:
+        marker_negative_exterior = _get_exterior_contained_in_larger_geom(
+            biomarker_negative, tumor_exterior
+        )
+    else:
+        marker_negative_exterior = None
     return dict(
         tumor=tumor_exterior,
         marker_positive=marker_positive_exterior,
@@ -249,32 +275,35 @@ def run_spatial_analysis(
         Whether to show the progress bar.
     """
     # This is a multipolygon that represents the entire tumor in our region of interest.
-    tumor_geom: MultiPolygon = unary_union(
-        [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
-    )
-    marker_positive_patches = (
+    tumor_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    if not tumor_patches:
+        print("no tumor patches found...")
+        return
+    tumor_geom = unary_union(tumor_patches)
+    marker_positive_patches = [
         p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
-    )
-    marker_negative_patches = (
+    ]
+    marker_negative_patches = [
         p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
-    )
-    marker_positive_geom = unary_union(list(marker_positive_patches))
-    marker_negative_geom = unary_union(list(marker_negative_patches))
+    ]
+    if marker_positive_patches:
+        marker_positive_geom = unary_union(marker_positive_patches)
+    else:
+        marker_positive_geom = None
+    if marker_negative_patches:
+        marker_negative_geom = unary_union(marker_negative_patches)
+    else:
+        marker_negative_geom = None
 
     exteriors = get_exteriors(
         tumor=tumor_geom,
         biomarker_positive=marker_positive_geom,
         biomarker_negative=marker_negative_geom,
     )
-    tumor_exterior = exteriors["tumor"]
+    tumor_exterior: MultiLineString = exteriors["tumor"]
     marker_positive_geom = exteriors["marker_positive"]
     marker_negative_geom = exteriors["marker_negative"]
     del marker_positive_patches, marker_negative_patches
-
-    # Polygons of blank tiles, so we can exclude cells in these regions.
-    # blank_tiles = unary_union(
-    #     [p.polygon for p in patches if p.patch_type == PatchType.BLANK]
-    # )
 
     with open(output_path, "w", newline="") as output_csv:
         dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
@@ -294,13 +323,14 @@ def run_spatial_analysis(
             # the distance of each cell is less than our tumor microenvironment. This
             # would probably be better than buffering, because the buffer function
             # seems to introduce some artifacts.
-            print("Filtering cells...")
+            print("Filtering cells in tumor microenvironment...")
             cells_in_microenv = [
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
                 and not tumor_geom.contains(cell.polygon)
             ]
+            print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
                 row_generator = _distances_for_cell_in_microenv(
                     cell=cell,
@@ -309,10 +339,7 @@ def run_spatial_analysis(
                     microenv_micrometer=distance_um,
                 )
                 for row in row_generator:
-                    # Only write the data if part of it is within our microenvironment.
-                    min_dist = min(row.dist_to_marker_pos, row.dist_to_marker_neg)
-                    if min_dist <= distance_px:
-                        dict_writer.writerow(row._asdict())
+                    dict_writer.writerow(row._asdict())
 
 
 class BaseLoader:
@@ -671,29 +698,31 @@ def cv2_add_patch_exteriors(
     color_negative = (255, 255, 0)  # cyan (bgr)
     color_positive = (42, 42, 165)  # brown (bgr)
 
-    for line in exts["marker_negative"]:
-        coords = list(zip(*line.xy))
-        assert len(coords) == 2
-        coords = [(int(x), int(y)) for x, y in coords]
-        image = cv2.line(
-            image,
-            coords[0],
-            coords[1],
-            color_negative,
-            thickness=line_thickness,
-        )
+    if exts["marker_negative"] is not None:
+        for line in exts["marker_negative"]:
+            coords = list(zip(*line.xy))
+            assert len(coords) == 2
+            coords = [(int(x), int(y)) for x, y in coords]
+            image = cv2.line(
+                image,
+                coords[0],
+                coords[1],
+                color_negative,
+                thickness=line_thickness,
+            )
 
-    for line in exts["marker_positive"]:
-        coords = list(zip(*line.xy))
-        assert len(coords) == 2
-        coords = [(int(x), int(y)) for x, y in coords]
-        image = cv2.line(
-            image,
-            coords[0],
-            coords[1],
-            color_positive,
-            thickness=line_thickness,
-        )
+    if exts["marker_positive"] is not None:
+        for line in exts["marker_positive"]:
+            coords = list(zip(*line.xy))
+            assert len(coords) == 2
+            coords = [(int(x), int(y)) for x, y in coords]
+            image = cv2.line(
+                image,
+                coords[0],
+                coords[1],
+                color_positive,
+                thickness=line_thickness,
+            )
 
     return image
 
