@@ -342,6 +342,146 @@ def run_spatial_analysis(
                     dict_writer.writerow(row._asdict())
 
 
+
+def _distances_for_patch_point_in_microenv(
+    cell_point: Cell,
+    marker_positive_geom: _base_geometry.BaseGeometry,
+    marker_negative_geom: _base_geometry.BaseGeometry,
+    microenv_micrometer: int,
+) -> ty.Generator[PointOutputData, None, None]:
+    """
+    (Mahmudul's Edit)
+    Yield distance information for one cell."""
+    distances = _get_distances_for_point(
+        cell_point,
+        positive_geom=marker_positive_geom,
+        negative_geom=marker_negative_geom,
+    )
+    try:
+        lines_from_point_to_patches = _get_nearest_points_for_point(
+            cell_point,
+            positive_geom=marker_positive_geom,
+            negative_geom=marker_negative_geom,
+        )
+    except ValueError:
+        print("Point Value Error")
+
+    if lines_from_point_to_patches.line_to_negative is None:
+        line_to_marker_neg = None
+    else:
+        line_to_marker_neg = lines_from_point_to_patches.line_to_negative.wkt
+    if lines_from_point_to_patches.line_to_positive is None:
+        line_to_marker_pos = None
+    else:
+        line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
+
+    yield PointOutputData(
+        point=cell_point.wkt,
+        dist_to_marker_neg=distances.dnegative,
+        dist_to_marker_pos=distances.dpositive,
+        line_to_marker_neg=line_to_marker_neg,
+        line_to_marker_pos=line_to_marker_pos,
+        cell_type='patch',
+        cell_uuid=0,
+        microenv_micrometer=microenv_micrometer,
+    )
+
+
+def find_impacted_patches(
+    patches: Patches,
+    cells: Cells,
+    microenv_distances: ty.Sequence[int],
+    mpp: float,
+    output_path: PathType = "output.csv",
+    progress_bar: bool = True,
+):
+    """
+    (Mahmudul's Edit)
+    This function is similar to Run Spatial Analysis Workflow. Instead of cell lattice points, middle point of each patch are chosen.
+
+    Results are stored in a CSV file.
+
+    Parameters
+    ----------
+    patches : list of Patch instances
+    cells : list of Cell instances
+    microenv_distances : sequence of int
+        Distances (in micrometers) to consider for tumor microenvironment.
+    output_path : PathType
+        Path to output CSV.
+    progress_bar : bool
+        Whether to show the progress bar.
+    """
+    # This is a multipolygon that represents the entire tumor in our region of interest.
+    tumor_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    if not tumor_patches:
+        print("no tumor patches found...")
+        return
+    tumor_geom = unary_union(tumor_patches)
+    marker_positive_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
+    ]
+    marker_negative_patches = [
+        p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE
+    ]
+    if marker_positive_patches:
+        marker_positive_geom = unary_union(marker_positive_patches)
+    else:
+        marker_positive_geom = None
+    if marker_negative_patches:
+        marker_negative_geom = unary_union(marker_negative_patches)
+    else:
+        marker_negative_geom = None
+
+    exteriors = get_exteriors(
+        tumor=tumor_geom,
+        biomarker_positive=marker_positive_geom,
+        biomarker_negative=marker_negative_geom,
+    )
+    tumor_exterior: MultiLineString = exteriors["tumor"]
+    marker_positive_geom = exteriors["marker_positive"]
+    marker_negative_geom = exteriors["marker_negative"]
+    del marker_positive_patches, marker_negative_patches
+
+    with open(output_path, "w", newline="") as output_csv:
+        dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
+        dict_writer.writeheader()
+
+        for distance_um in microenv_distances:
+            distance_px = round(distance_um / mpp)
+            print(f"Working on distance = {distance_um} um ({distance_px} px)")
+            tumor_microenv = tumor_exterior.buffer(distance=distance_px)
+
+            # TODO: this is NOT the same as the method we discussed with Joel and
+            # Mahmudul. We discussed getting all of the POINTS inside the
+            # microenvironment. But here, we take all of the CELLS in the
+            # microenvironment. It's much easier to implement this, so let's roll with
+            # it.
+            # TODO: another way of finding cells that are near tumor is to query whether
+            # the distance of each cell is less than our tumor microenvironment. This
+            # would probably be better than buffering, because the buffer function
+            # seems to introduce some artifacts.
+            print("Filtering cells in tumor microenvironment...")
+            cells_in_microenv = [
+                cell
+                for cell in cells
+                if tumor_microenv.contains(cell)
+                and not tumor_geom.contains(cell)
+            ]
+            print("Calculating distances for each cell...")
+            for cell in tqdm(cells_in_microenv, disable=not progress_bar):
+                row_generator = _distances_for_patch_point_in_microenv(
+                    cell_point=cell,
+                    marker_positive_geom=marker_positive_geom,
+                    marker_negative_geom=marker_negative_geom,
+                    microenv_micrometer=distance_um,
+                )
+                for row in row_generator:
+                    dict_writer.writerow(row._asdict())
+
+
+
+
 class BaseLoader:
     """BaseLoader object.
 
