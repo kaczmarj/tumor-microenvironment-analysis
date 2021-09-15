@@ -925,38 +925,40 @@ def cv2_add_cell_distance_lines(
     import shapely.wkt
 
     for point_data in points_data:
-        line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
-        line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
-        line_to_pos_start = (
-            int(line_to_pos.coords.xy[0][0]),
-            int(line_to_pos.coords.xy[1][0]),
-        )
-        line_to_pos_end = (
-            int(line_to_pos.coords.xy[0][1]),
-            int(line_to_pos.coords.xy[1][1]),
-        )
-        line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
-        line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
-        line_to_neg_start = (
-            int(line_to_neg.coords.xy[0][0]),
-            int(line_to_neg.coords.xy[1][0]),
-        )
-        line_to_neg_end = (
-            int(line_to_neg.coords.xy[0][1]),
-            int(line_to_neg.coords.xy[1][1]),
-        )
-        image = cv2.line(
-            image,
-            line_to_pos_start,
-            line_to_pos_end,
-            color=color_positive,
-            thickness=line_thickness,
-        )
-        image = cv2.line(
-            image,
-            line_to_neg_start,
-            line_to_neg_end,
-            color=color_negative,
-            thickness=line_thickness,
-        )
+        if point_data.line_to_marker_pos:
+            line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
+            line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
+            line_to_pos_start = (
+                int(line_to_pos.coords.xy[0][0]),
+                int(line_to_pos.coords.xy[1][0]),
+            )
+            line_to_pos_end = (
+                int(line_to_pos.coords.xy[0][1]),
+                int(line_to_pos.coords.xy[1][1]),
+            )
+            image = cv2.line(
+                image,
+                line_to_pos_start,
+                line_to_pos_end,
+                color=color_positive,
+                thickness=line_thickness,
+            )
+        if point_data.line_to_marker_neg:
+            line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
+            line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
+            line_to_neg_start = (
+                int(line_to_neg.coords.xy[0][0]),
+                int(line_to_neg.coords.xy[1][0]),
+            )
+            line_to_neg_end = (
+                int(line_to_neg.coords.xy[0][1]),
+                int(line_to_neg.coords.xy[1][1]),
+            )
+            image = cv2.line(
+                image,
+                line_to_neg_start,
+                line_to_neg_end,
+                color=color_negative,
+                thickness=line_thickness,
+            )
     return image
