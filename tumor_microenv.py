@@ -188,6 +188,7 @@ def _distances_for_cell_in_microenv(
     microenv_micrometer: int,
 ) -> ty.Generator[PointOutputData, None, None]:
     """Yield distance information for one cell."""
+    cell_point: Point
     for cell_point in cell.lattice_points.geoms:
         distances = _get_distances_for_point(
             cell_point,
@@ -342,7 +343,6 @@ def run_spatial_analysis(
                     dict_writer.writerow(row._asdict())
 
 
-
 def _distances_for_patch_point_in_microenv(
     cell_point: Cell,
     marker_positive_geom: _base_geometry.BaseGeometry,
@@ -376,13 +376,13 @@ def _distances_for_patch_point_in_microenv(
         line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
 
     yield PointOutputData(
-        point=cell_point.wkt,
+        point="",
         dist_to_marker_neg=distances.dnegative,
         dist_to_marker_pos=distances.dpositive,
         line_to_marker_neg=line_to_marker_neg,
         line_to_marker_pos=line_to_marker_pos,
-        cell_type='patch',
-        cell_uuid=0,
+        cell_type="patch",
+        cell_uuid="",
         microenv_micrometer=microenv_micrometer,
     )
 
@@ -397,7 +397,8 @@ def find_impacted_patches(
 ):
     """
     (Mahmudul's Edit)
-    This function is similar to Run Spatial Analysis Workflow. Instead of cell lattice points, middle point of each patch are chosen.
+    This function is similar to Run Spatial Analysis Workflow. Instead of cell lattice
+    points, middle point of each patch are chosen.
 
     Results are stored in a CSV file.
 
@@ -465,8 +466,7 @@ def find_impacted_patches(
             cells_in_microenv = [
                 cell
                 for cell in cells
-                if tumor_microenv.contains(cell)
-                and not tumor_geom.contains(cell)
+                if tumor_microenv.contains(cell) and not tumor_geom.contains(cell)
             ]
             print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
@@ -478,8 +478,6 @@ def find_impacted_patches(
                 )
                 for row in row_generator:
                     dict_writer.writerow(row._asdict())
-
-
 
 
 class BaseLoader:
@@ -668,8 +666,6 @@ def get_npy_and_json_files_for_roi(
 
     actual_analysis_size = patch_size * math.ceil(analysis_size / patch_size)
     actual_tumor_microenv = patch_size * math.ceil(tumor_microenv / patch_size)
-    # print(f"setting analysis_size={actual_analysis_size} (original {analysis_size})")
-    # print(f"setting tumor_microenv={actual_tumor_microenv} (original {tumor_microenv})")
     del analysis_size, tumor_microenv
     patches_right = patches_down = math.ceil(actual_analysis_size / patch_size)
 
@@ -929,38 +925,40 @@ def cv2_add_cell_distance_lines(
     import shapely.wkt
 
     for point_data in points_data:
-        line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
-        line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
-        line_to_pos_start = (
-            int(line_to_pos.coords.xy[0][0]),
-            int(line_to_pos.coords.xy[1][0]),
-        )
-        line_to_pos_end = (
-            int(line_to_pos.coords.xy[0][1]),
-            int(line_to_pos.coords.xy[1][1]),
-        )
-        line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
-        line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
-        line_to_neg_start = (
-            int(line_to_neg.coords.xy[0][0]),
-            int(line_to_neg.coords.xy[1][0]),
-        )
-        line_to_neg_end = (
-            int(line_to_neg.coords.xy[0][1]),
-            int(line_to_neg.coords.xy[1][1]),
-        )
-        image = cv2.line(
-            image,
-            line_to_pos_start,
-            line_to_pos_end,
-            color=color_positive,
-            thickness=line_thickness,
-        )
-        image = cv2.line(
-            image,
-            line_to_neg_start,
-            line_to_neg_end,
-            color=color_negative,
-            thickness=line_thickness,
-        )
+        if point_data.line_to_marker_pos:
+            line_to_pos = shapely.wkt.loads(point_data.line_to_marker_pos)
+            line_to_pos = translate(line_to_pos, xoff=xoff, yoff=yoff)
+            line_to_pos_start = (
+                int(line_to_pos.coords.xy[0][0]),
+                int(line_to_pos.coords.xy[1][0]),
+            )
+            line_to_pos_end = (
+                int(line_to_pos.coords.xy[0][1]),
+                int(line_to_pos.coords.xy[1][1]),
+            )
+            image = cv2.line(
+                image,
+                line_to_pos_start,
+                line_to_pos_end,
+                color=color_positive,
+                thickness=line_thickness,
+            )
+        if point_data.line_to_marker_neg:
+            line_to_neg = shapely.wkt.loads(point_data.line_to_marker_neg)
+            line_to_neg = translate(line_to_neg, xoff=xoff, yoff=yoff)
+            line_to_neg_start = (
+                int(line_to_neg.coords.xy[0][0]),
+                int(line_to_neg.coords.xy[1][0]),
+            )
+            line_to_neg_end = (
+                int(line_to_neg.coords.xy[0][1]),
+                int(line_to_neg.coords.xy[1][1]),
+            )
+            image = cv2.line(
+                image,
+                line_to_neg_start,
+                line_to_neg_end,
+                color=color_negative,
+                thickness=line_thickness,
+            )
     return image
