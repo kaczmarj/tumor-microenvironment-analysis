@@ -631,6 +631,10 @@ def read_point_csv(path: PathType) -> ty.List[PointOutputData]:
         return [PointOutputData._make(r) for r in reader]
 
 
+class CentralPatchFileNotFound(FileNotFoundError):
+    """At least one central patch file is not found."""
+
+
 def get_npy_and_json_files_for_roi(
     xmin: int,
     ymin: int,
@@ -664,8 +668,8 @@ def get_npy_and_json_files_for_roi(
 
     actual_analysis_size = patch_size * math.ceil(analysis_size / patch_size)
     actual_tumor_microenv = patch_size * math.ceil(tumor_microenv / patch_size)
-    print(f"setting analysis_size={actual_analysis_size} (original {analysis_size})")
-    print(f"setting tumor_microenv={actual_tumor_microenv} (original {tumor_microenv})")
+    # print(f"setting analysis_size={actual_analysis_size} (original {analysis_size})")
+    # print(f"setting tumor_microenv={actual_tumor_microenv} (original {tumor_microenv})")
     del analysis_size, tumor_microenv
     patches_right = patches_down = math.ceil(actual_analysis_size / patch_size)
 
@@ -747,7 +751,7 @@ def get_npy_and_json_files_for_roi(
         xs, ys, patch_size=patch_size, extension="npy", parent=data_root
     )
     if not all(p.exists() for p in patches_in_roi):
-        raise FileNotFoundError("some central patches do not exist")
+        raise CentralPatchFileNotFound("some central patches do not exist")
 
     top_patches = coords_to_paths(
         top_x, top_y, patch_size=patch_size, extension="npy", parent=data_root
@@ -762,10 +766,10 @@ def get_npy_and_json_files_for_roi(
         left_x, left_y, patch_size=patch_size, extension="npy", parent=data_root
     )
 
-    all_top_patches_exist = all(p.exists() for p in top_patches)
-    all_right_patches_exist = all(p.exists() for p in right_patches)
-    all_bottom_patches_exist = all(p.exists() for p in bottom_patches)
-    all_left_patches_exist = all(p.exists() for p in left_patches)
+    # all_top_patches_exist = all(p.exists() for p in top_patches)
+    # all_right_patches_exist = all(p.exists() for p in right_patches)
+    # all_bottom_patches_exist = all(p.exists() for p in bottom_patches)
+    # all_left_patches_exist = all(p.exists() for p in left_patches)
 
     # Some scenarios should never happen.
     # TODO: we need to fix this... at upper-left corner, for example, not all of the
@@ -777,14 +781,14 @@ def get_npy_and_json_files_for_roi(
     #     raise FileNotFoundError("some top and bottom patches do not exist")
 
     # At corners, some patches will not exist.
-    if not all_top_patches_exist and not all_left_patches_exist:
-        print("upper-left corner")
-    elif not all_top_patches_exist and not all_right_patches_exist:
-        print("upper-right corner")
-    elif not all_bottom_patches_exist and not all_left_patches_exist:
-        print("bottom-left corner")
-    elif not all_bottom_patches_exist and not all_right_patches_exist:
-        print("bottom-right corner")
+    # if not all_top_patches_exist and not all_left_patches_exist:
+    #     print("upper-left corner")
+    # elif not all_top_patches_exist and not all_right_patches_exist:
+    #     print("upper-right corner")
+    # elif not all_bottom_patches_exist and not all_left_patches_exist:
+    #     print("bottom-left corner")
+    # elif not all_bottom_patches_exist and not all_right_patches_exist:
+    #     print("bottom-right corner")
 
     border_patches = top_patches + right_patches + bottom_patches + left_patches
     # We have some duplicates because the corners overlap.
