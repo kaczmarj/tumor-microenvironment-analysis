@@ -375,13 +375,13 @@ def _distances_for_patch_point_in_microenv(
         line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
 
     yield PointOutputData(
-        point=cell_point.wkt,
+        point="",
         dist_to_marker_neg=distances.dnegative,
         dist_to_marker_pos=distances.dpositive,
         line_to_marker_neg=line_to_marker_neg,
         line_to_marker_pos=line_to_marker_pos,
         cell_type="patch",
-        cell_uuid=0,
+        cell_uuid="",
         microenv_micrometer=microenv_micrometer,
     )
 
@@ -396,7 +396,8 @@ def find_impacted_patches(
 ):
     """
     (Mahmudul's Edit)
-    This function is similar to Run Spatial Analysis Workflow. Instead of cell lattice points, middle point of each patch are chosen.
+    This function is similar to Run Spatial Analysis Workflow. Instead of cell lattice
+    points, middle point of each patch are chosen.
 
     Results are stored in a CSV file.
 
@@ -664,8 +665,6 @@ def get_npy_and_json_files_for_roi(
 
     actual_analysis_size = patch_size * math.ceil(analysis_size / patch_size)
     actual_tumor_microenv = patch_size * math.ceil(tumor_microenv / patch_size)
-    # print(f"setting analysis_size={actual_analysis_size} (original {analysis_size})")
-    # print(f"setting tumor_microenv={actual_tumor_microenv} (original {tumor_microenv})")
     del analysis_size, tumor_microenv
     patches_right = patches_down = math.ceil(actual_analysis_size / patch_size)
 
