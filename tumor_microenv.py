@@ -188,6 +188,7 @@ def _distances_for_cell_in_microenv(
     microenv_micrometer: int,
 ) -> ty.Generator[PointOutputData, None, None]:
     """Yield distance information for one cell."""
+    cell_point: Point
     for cell_point in cell.lattice_points.geoms:
         distances = _get_distances_for_point(
             cell_point,
