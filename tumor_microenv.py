@@ -342,7 +342,6 @@ def run_spatial_analysis(
                     dict_writer.writerow(row._asdict())
 
 
-
 def _distances_for_patch_point_in_microenv(
     cell_point: Cell,
     marker_positive_geom: _base_geometry.BaseGeometry,
@@ -381,7 +380,7 @@ def _distances_for_patch_point_in_microenv(
         dist_to_marker_pos=distances.dpositive,
         line_to_marker_neg=line_to_marker_neg,
         line_to_marker_pos=line_to_marker_pos,
-        cell_type='patch',
+        cell_type="patch",
         cell_uuid=0,
         microenv_micrometer=microenv_micrometer,
     )
@@ -465,8 +464,7 @@ def find_impacted_patches(
             cells_in_microenv = [
                 cell
                 for cell in cells
-                if tumor_microenv.contains(cell)
-                and not tumor_geom.contains(cell)
+                if tumor_microenv.contains(cell) and not tumor_geom.contains(cell)
             ]
             print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
@@ -478,8 +476,6 @@ def find_impacted_patches(
                 )
                 for row in row_generator:
                     dict_writer.writerow(row._asdict())
-
-
 
 
 class BaseLoader:
