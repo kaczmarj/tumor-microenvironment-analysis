@@ -312,7 +312,7 @@ def run_spatial_analysis(
 
         for distance_um in microenv_distances:
             distance_px = round(distance_um / mpp)
-            print(f"Working on distance = {distance_um} um ({distance_px} px)")
+            # print(f"Working on distance = {distance_um} um ({distance_px} px)")
             tumor_microenv = tumor_exterior.buffer(distance=distance_px)
 
             # TODO: this is NOT the same as the method we discussed with Joel and
@@ -324,14 +324,14 @@ def run_spatial_analysis(
             # the distance of each cell is less than our tumor microenvironment. This
             # would probably be better than buffering, because the buffer function
             # seems to introduce some artifacts.
-            print("Filtering cells in tumor microenvironment...")
+            # print("Filtering cells in tumor microenvironment...")
             cells_in_microenv = [
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
                 and not tumor_geom.contains(cell.polygon)
             ]
-            print("Calculating distances for each cell...")
+            # print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
                 row_generator = _distances_for_cell_in_microenv(
                     cell=cell,
