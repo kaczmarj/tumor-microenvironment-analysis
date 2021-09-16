@@ -53,6 +53,8 @@ def main(
     all_xs_ys = list(itertools.product(all_xs, all_ys))
     print(f"maximum number of iterations: {len(all_xs_ys)}")
 
+    global run_one_roi  # hack to allow pickling (needed for multiprocessing)
+
     def run_one_roi(xy: ty.Tuple[int, int]):
         xmin, ymin = xy
         try:
