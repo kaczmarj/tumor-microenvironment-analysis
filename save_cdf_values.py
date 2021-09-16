@@ -52,11 +52,8 @@ def save_cdf_values(df: pd.DataFrame, mpp: float, output_dir: Path):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--roi-path", type=Path, required=True)
-    p.add_argument("--data-root", type=Path, required=True, help="path to npy files")
     p.add_argument("--points-csvs-root", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--patch-size", type=int, default=73)
     p.add_argument("--mpp", type=float, default=0.34622)
     args = p.parse_args()
     main(
