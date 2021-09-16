@@ -93,8 +93,8 @@ def main(
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--data-root", type=Path)
-    p.add_argument("--output-dir", type=Path)
+    p.add_argument("--data-root", type=Path, required=True)
+    p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--analysis-size", type=int, default=730, help="pixels")
     p.add_argument("--tumor-microenv", type=int, default=100, help="micrometers")
     p.add_argument("--patch-size", type=int, default=73, help="pixels")
