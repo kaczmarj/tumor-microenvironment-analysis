@@ -18,12 +18,9 @@ def main(
     points_csvs_root: Path,
     output_dir: Path,
     patch_size: int = 73,
-    mpp: float = 0.34622,
 ):
     print("Reading output CSVs ...")
     df = pd.concat(pd.read_csv(p) for p in points_csvs_root.glob("*.csv"))
-    # Save values to make CDF plots.
-    save_cdf_values(df=df, mpp=mpp, output_dir=output_dir)
     with tempfile.NamedTemporaryFile() as f:
         df.to_csv(f.name, index=False)
         points_data = tm.read_point_csv(f.name)
@@ -62,7 +59,7 @@ def main(
         image, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=10
     )
     print("Saving image with tumor exteriors only")
-    assert cv2.imwrite(str(output_dir / "overlay-boundaries.png"), image)
+    assert cv2.imwrite(output_dir / "overlay-boundaries.png", image)
 
     image = tm.cv2_add_cell_distance_lines(
         image,
@@ -75,39 +72,7 @@ def main(
         image, points_data=points_data, xoff=-xoff, yoff=-yoff, cell_radius=15
     )
     print("Saving image with tumor exteriors, cells, and distance lines")
-    assert cv2.imwrite(str(output_dir / "overlay-boundaries-cells-lines.png"), image)
-
-
-def save_cdf_values(df: pd.DataFrame, mpp: float, output_dir: Path):
-    df.loc[:, "dist_to_marker_neg"] *= mpp
-    df.loc[:, "dist_to_marker_pos"] *= mpp
-
-    def get_pdf_and_cdf(values, bins=100):
-        values = np.asarray(values)
-        count, bins = np.histogram(values, bins=100)
-        pdf = count / count.sum()
-        cdf = pdf.cumsum()
-        return pdf, cdf, bins
-
-    cell_types = ["cd4", "cd8", "cd16", "cd163"]
-    for cell_type in cell_types:
-        pdf_neg, cdf_neg, bins_neg = get_pdf_and_cdf(
-            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"]
-        )
-        pdf_pos, cdf_pos, bins_pos = get_pdf_and_cdf(
-            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"]
-        )
-        f = output_dir / f"cdf_values_{cell_type}.npz"
-        print(f"Saving file {f}")
-        np.savez_compressed(
-            f,
-            pdf_neg=pdf_neg,
-            cdf_neg=cdf_neg,
-            bins_neg=bins_neg,
-            pdf_pos=pdf_pos,
-            cdf_pos=cdf_pos,
-            bins_pos=bins_pos,
-        )
+    assert cv2.imwrite(output_dir / "overlay-boundaries-cells-lines.png", image)
 
 
 if __name__ == "__main__":
@@ -117,7 +82,6 @@ if __name__ == "__main__":
     p.add_argument("--points-csvs-root", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--patch-size", type=int, default=73)
-    p.add_argument("--mpp", type=float, default=0.34622)
     args = p.parse_args()
     main(
         roi_path=args.roi_path,
