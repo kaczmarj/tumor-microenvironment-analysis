@@ -535,12 +535,16 @@ class LoaderV1(BaseLoader):
         background: int,
         marker_positive: int,
         marker_negative: int,
+        tumor_threshold: float = 0.05,
+        marker_pos_threshold: float = 0.40,
     ):
         self.patch_paths = patch_paths
         self.cells_json = cells_json
         self.background = background
         self.marker_positive = marker_positive
         self.marker_negative = marker_negative
+        self.tumor_threshold = tumor_threshold
+        self.marker_pos_threshold = marker_pos_threshold
 
     @staticmethod
     def _path_to_polygon(path) -> Polygon:
@@ -565,9 +569,9 @@ class LoaderV1(BaseLoader):
         percent_tumor = tumor_mask.mean()
         nonbackground_mask = patch != self.background
         percent_nonbackground = nonbackground_mask.mean()
-        if percent_tumor >= 0.05:
+        if percent_tumor >= self.tumor_threshold:
             n_tumor_points = tumor_mask.sum()
-            if marker_pos_mask.sum() / n_tumor_points >= 0.40:
+            if marker_pos_mask.sum() / n_tumor_points >= self.marker_pos_threshold:
                 return PatchType.TUMOR, BiomarkerStatus.POSITIVE
             else:
                 return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
