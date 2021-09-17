@@ -55,15 +55,20 @@ def main(
     print("Saving image with tumor exteriors only")
     assert cv2.imwrite(str(output_dir / "overlay-boundaries.png"), image)
 
+    seed = 42
     image = tm.cv2_add_cell_distance_lines(
         image,
-        points_data=points_data,
+        points_data=tm.gen_random_point_per_cell(points_data, seed=seed),
         xoff=-xoff,
         yoff=-yoff,
         line_thickness=2,
     )
     image = tm.cv2_add_cell_points(
-        image, points_data=points_data, xoff=-xoff, yoff=-yoff, cell_radius=15
+        image,
+        points_data=tm.gen_random_point_per_cell(points_data, seed=seed),
+        xoff=-xoff,
+        yoff=-yoff,
+        cell_radius=15,
     )
     print("Saving image with tumor exteriors, cells, and distance lines")
     assert cv2.imwrite(str(output_dir / "overlay-boundaries-cells-lines.png"), image)
