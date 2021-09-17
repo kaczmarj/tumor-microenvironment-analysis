@@ -806,6 +806,59 @@ def get_npy_and_json_files_for_roi(
     return patches_in_roi, jsons_in_roi
 
 
+def cv2_add_patchs(
+    image: np.ndarray,
+    patches: Patches,
+    xoff: int = -35917,
+    yoff: int = -23945,
+    color_negative: ty.Tuple[int, int, int] = (255, 255, 0),
+    color_positive: ty.Tuple[int, int, int] = (42, 42, 165),
+    line_thickness: int = 5,
+) -> np.ndarray:
+    """Add patches to image. This adds all squares, not just the exteriors.
+
+    Negative is cyan by default. Positive is brown by default.
+    """
+    import cv2
+    from shapely.affinity import translate
+
+    # tum_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    pos_patches = MultiPolygon(
+        [p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE]
+    )
+    neg_patches = MultiPolygon(
+        [p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE]
+    )
+    # tum_patches = translate(tum_patches, xoff=xoff, yoff=yoff)
+    pos_patches = translate(pos_patches, xoff=xoff, yoff=yoff)
+    neg_patches = translate(neg_patches, xoff=xoff, yoff=yoff)
+
+    color_negative = (255, 255, 0)  # cyan (bgr)
+    color_positive = (42, 42, 165)  # brown (bgr)
+
+    for geom in pos_patches.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_positive,
+            thickness=line_thickness,
+        )
+
+    for geom in neg_patches.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_negative,
+            thickness=line_thickness,
+        )
+
+    return image
+
+
 def cv2_add_patch_exteriors(
     image: np.ndarray,
     patches: Patches,
