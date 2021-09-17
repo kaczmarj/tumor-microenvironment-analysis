@@ -312,7 +312,7 @@ def run_spatial_analysis(
 
         for distance_um in microenv_distances:
             distance_px = round(distance_um / mpp)
-            print(f"Working on distance = {distance_um} um ({distance_px} px)")
+            # print(f"Working on distance = {distance_um} um ({distance_px} px)")
             tumor_microenv = tumor_exterior.buffer(distance=distance_px)
 
             # TODO: this is NOT the same as the method we discussed with Joel and
@@ -324,14 +324,14 @@ def run_spatial_analysis(
             # the distance of each cell is less than our tumor microenvironment. This
             # would probably be better than buffering, because the buffer function
             # seems to introduce some artifacts.
-            print("Filtering cells in tumor microenvironment...")
+            # print("Filtering cells in tumor microenvironment...")
             cells_in_microenv = [
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
                 and not tumor_geom.contains(cell.polygon)
             ]
-            print("Calculating distances for each cell...")
+            # print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
                 row_generator = _distances_for_cell_in_microenv(
                     cell=cell,
@@ -535,12 +535,16 @@ class LoaderV1(BaseLoader):
         background: int,
         marker_positive: int,
         marker_negative: int,
+        tumor_threshold: float = 0.05,
+        marker_pos_threshold: float = 0.40,
     ):
         self.patch_paths = patch_paths
         self.cells_json = cells_json
         self.background = background
         self.marker_positive = marker_positive
         self.marker_negative = marker_negative
+        self.tumor_threshold = tumor_threshold
+        self.marker_pos_threshold = marker_pos_threshold
 
     @staticmethod
     def _path_to_polygon(path) -> Polygon:
@@ -565,9 +569,9 @@ class LoaderV1(BaseLoader):
         percent_tumor = tumor_mask.mean()
         nonbackground_mask = patch != self.background
         percent_nonbackground = nonbackground_mask.mean()
-        if percent_tumor >= 0.05:
+        if percent_tumor >= self.tumor_threshold:
             n_tumor_points = tumor_mask.sum()
-            if marker_pos_mask.sum() / n_tumor_points >= 0.40:
+            if marker_pos_mask.sum() / n_tumor_points >= self.marker_pos_threshold:
                 return PatchType.TUMOR, BiomarkerStatus.POSITIVE
             else:
                 return PatchType.TUMOR, BiomarkerStatus.NEGATIVE
@@ -800,6 +804,59 @@ def get_npy_and_json_files_for_roi(
     )
 
     return patches_in_roi, jsons_in_roi
+
+
+def cv2_add_patchs(
+    image: np.ndarray,
+    patches: Patches,
+    xoff: int = -35917,
+    yoff: int = -23945,
+    color_negative: ty.Tuple[int, int, int] = (255, 255, 0),
+    color_positive: ty.Tuple[int, int, int] = (42, 42, 165),
+    line_thickness: int = 5,
+) -> np.ndarray:
+    """Add patches to image. This adds all squares, not just the exteriors.
+
+    Negative is cyan by default. Positive is brown by default.
+    """
+    import cv2
+    from shapely.affinity import translate
+
+    # tum_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
+    pos_patches = MultiPolygon(
+        [p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE]
+    )
+    neg_patches = MultiPolygon(
+        [p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.NEGATIVE]
+    )
+    # tum_patches = translate(tum_patches, xoff=xoff, yoff=yoff)
+    pos_patches = translate(pos_patches, xoff=xoff, yoff=yoff)
+    neg_patches = translate(neg_patches, xoff=xoff, yoff=yoff)
+
+    color_negative = (255, 255, 0)  # cyan (bgr)
+    color_positive = (42, 42, 165)  # brown (bgr)
+
+    for geom in pos_patches.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_positive,
+            thickness=line_thickness,
+        )
+
+    for geom in neg_patches.geoms:
+        poly = np.asarray(list(zip(*geom.exterior.xy))).astype("int32")
+        image = cv2.polylines(
+            image,
+            [poly],
+            isClosed=True,
+            color=color_negative,
+            thickness=line_thickness,
+        )
+
+    return image
 
 
 def cv2_add_patch_exteriors(
