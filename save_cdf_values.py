@@ -7,14 +7,9 @@ import numpy as np
 import pandas as pd
 
 
-def main(
-    points_csvs_root: Path,
-    output_dir: Path,
-    mpp: float = 0.34622,
-):
-    print("Reading output CSVs ...")
-    df = pd.concat(pd.read_csv(p) for p in points_csvs_root.glob("*.csv"))
-    # Save values to make CDF plots.
+def main(points_csv: Path, output_dir: Path, mpp: float = 0.34622):
+    print("Reading output CSV ...")
+    df = pd.read_csv(points_csv)
     save_cdf_values(df=df, mpp=mpp, output_dir=output_dir)
 
 
@@ -52,12 +47,12 @@ def save_cdf_values(df: pd.DataFrame, mpp: float, output_dir: Path):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--points-csvs-root", type=Path, required=True)
+    p.add_argument("--points-csv", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--mpp", type=float, default=0.34622)
     args = p.parse_args()
     main(
-        points_csvs_root=args.points_csvs_root,
+        points_csv=args.points_csv,
         output_dir=args.output_dir,
         mpp=args.mpp,
     )

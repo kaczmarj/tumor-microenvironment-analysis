@@ -3,11 +3,9 @@
 import argparse
 import itertools
 from pathlib import Path
-import tempfile
 
 import cv2
 import numpy as np
-import pandas as pd
 
 import tumor_microenv as tm
 
@@ -15,16 +13,12 @@ import tumor_microenv as tm
 def main(
     roi_path: Path,
     data_root: Path,
-    points_csvs_root: Path,
+    points_csv: Path,
     output_dir: Path,
     patch_size: int = 73,
 ):
     print("Reading output CSVs ...")
-    df = pd.concat(pd.read_csv(p) for p in points_csvs_root.glob("*.csv"))
-    with tempfile.NamedTemporaryFile() as f:
-        df.to_csv(f.name, index=False)
-        points_data = tm.read_point_csv(f.name)
-    del df
+    points_data = tm.read_point_csv(points_csv)
 
     print("Reading image ...")
     offset_path = roi_path.parent / "offset.txt"
@@ -79,14 +73,14 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--roi-path", type=Path, required=True)
     p.add_argument("--data-root", type=Path, required=True, help="path to npy files")
-    p.add_argument("--points-csvs-root", type=Path, required=True)
+    p.add_argument("--points-csv", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--patch-size", type=int, default=73)
     args = p.parse_args()
     main(
         roi_path=args.roi_path,
         data_root=args.data_root,
-        points_csvs_root=args.points_csvs_root,
+        points_csv=args.points_csv,
         output_dir=args.output_dir,
         patch_size=args.patch_size,
     )
