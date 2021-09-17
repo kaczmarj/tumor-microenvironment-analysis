@@ -27,10 +27,10 @@ def save_cdf_values(df: pd.DataFrame, mpp: float, output_dir: Path):
     cell_types = ["cd4", "cd8", "cd16", "cd163"]
     for cell_type in cell_types:
         pdf_neg, cdf_neg, bins_neg = get_pdf_and_cdf(
-            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"]
+            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"].dropna()
         )
         pdf_pos, cdf_pos, bins_pos = get_pdf_and_cdf(
-            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"]
+            df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"].dropna()
         )
         f = output_dir / f"cdf_values_{cell_type}.npz"
         print(f"Saving file {f}")
