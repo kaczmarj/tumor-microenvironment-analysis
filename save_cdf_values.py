@@ -24,7 +24,8 @@ def save_cdf_values(df: pd.DataFrame, mpp: float, output_dir: Path):
         cdf = pdf.cumsum()
         return pdf, cdf, bins
 
-    cell_types = ["cd4", "cd8", "cd16", "cd163"]
+    #cell_types = ["cd4", "cd8", "cd16", "cd163"]
+    cell_types = ["cd8", "cd16", "cd163"]
     for cell_type in cell_types:
         pdf_neg, cdf_neg, bins_neg = get_pdf_and_cdf(
             df.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"].dropna()
@@ -56,3 +57,6 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         mpp=args.mpp,
     )
+
+
+# python save_cdf_values.py --points-csv /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/combined_csv.csv --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result

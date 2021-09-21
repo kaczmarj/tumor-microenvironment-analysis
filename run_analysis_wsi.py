@@ -77,7 +77,8 @@ def main(
             marker_negative=7,
         )
         patches, cells = loader()
-        cells = [c for c in cells if c.cell_type in {"cd4", "cd8", "cd16", "cd163"}]
+        #cells = [c for c in cells if c.cell_type in {"cd4", "cd8", "cd16", "cd163"}]
+        cells = [c for c in cells if c.cell_type in {"cd8", "cd16", "cd163"}]
         # Get the centroid per cell.
         # cells = [c._replace(polygon=c.polygon.centroid) for c in cells]
         tm.run_spatial_analysis(
@@ -115,3 +116,9 @@ if __name__ == "__main__":
     )
     t1 = time.time()
     print(f"Finished in {(t1 - t0) / 60:0.1f} minutes")
+
+
+
+
+
+# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/N9430-B11 --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result --processes 20
