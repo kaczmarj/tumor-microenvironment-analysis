@@ -376,7 +376,7 @@ def _distances_for_patch_point_in_microenv(
         line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
 
     yield PointOutputData(
-        point="",
+        point=cell_point.wkt,
         dist_to_marker_neg=distances.dnegative,
         dist_to_marker_pos=distances.dpositive,
         line_to_marker_neg=line_to_marker_neg,
@@ -488,18 +488,18 @@ class BaseLoader:
     must return a tuple of (Patches, Cells).
     """
 
-    def __call__(self) -> ty.Tuple[Patches, Cells]:
+    def __call__(self) -> ty.Tuple[Patches, Cells, Cells]:
         out = self.load()
-        if len(out) != 2:
-            raise ValueError("expected self.load() to return two objects")
-        patches, cells = out
+        if len(out) != 3:
+            raise ValueError("expected self.load() to return three objects")
+        patches, cells, patch_midpoints = out
         if not all(isinstance(p, Patch) for p in patches):
             raise ValueError("first return val of self.load() must be list of Patches")
         if not all(isinstance(c, Cell) for c in cells):
             raise ValueError("second return val of self.load() must be list of Cells")
-        return patches, cells
+        return patches, cells, patch_midpoints
 
-    def load(self) -> ty.Tuple[Patches, Cells]:
+    def load(self) -> ty.Tuple[Patches, Cells, Cells]:
         raise NotImplementedError()
 
 
@@ -611,18 +611,22 @@ class LoaderV1(BaseLoader):
                 )
                 yield cell
 
-    def load(self) -> ty.Tuple[Patches, Cells]:
+    def load(self) -> ty.Tuple[Patches, Cells, Cells]:
         """Load data into a list of Patch objects and a list of Cell objects."""
         patches: Patches = []
+        patch_midpoints: Cells = [] # Helper list to contain patch midpoints
         for patch_path in self.patch_paths:
             patches.append(self._npy_file_to_patch_object(path=patch_path))
+            # Following 2 lines of codes are finding out midpoint of a patch
+            x, y, height, width = map(int, patch_path.stem.split("_"))
+            patch_midpoints.append(Point(x + (height//2), y + (width//2)))
 
         cells: Cells = []
         for cells_path in self.cells_json:
             for cell in self._load_cells(cells_path):
                 cells.append(cell)
 
-        return patches, cells
+        return patches, cells, patch_midpoints
 
 
 def read_point_csv(path: PathType) -> ty.List[PointOutputData]:
