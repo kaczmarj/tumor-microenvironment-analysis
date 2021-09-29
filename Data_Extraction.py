@@ -12,18 +12,18 @@ import cv2
 from bson import json_util
 
 # Following codes are necessary for including patches that are annotated by Prof. Shroyer as Tumor.
-annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot/SBU_Annot'
-patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/N9430-B11-multires.tif/'
+annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot/KYT_Annot/'
+patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/668-multires.tif/'
 manifest_file = os.path.join(annotation_dir, 'manifest.csv')
-slide_name = 'N9430-B11'
-clinicaltrialsubjectid = 'N9430'
-imageid = 'B11'
+slide_name = '930'
+clinicaltrialsubjectid = '930'
+imageid = '930:kytnew'
 manifest = pd.read_csv(manifest_file)
-save_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/{}'.format(slide_name)
+save_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/{}'.format(slide_name)
 
 # Path parameters
-segmentation_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/WSI/wsi_patch_146_146/Anchor_UNET"
-wsi_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi/SBU"
+segmentation_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/WSI/wsi_patch_146_146/Anchor_UNET/KYT"
+wsi_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi/KYT"
 wsi_filename = os.path.join(wsi_input_directory,'{}-multires.tif'.format(slide_name))
 predicted_segmentation_files = glob.glob(os.path.join(segmentation_input_directory,"{}-multires.tif/*.npy".format(slide_name)))
 patch_size = 146

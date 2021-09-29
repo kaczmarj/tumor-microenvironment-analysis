@@ -357,6 +357,9 @@ def _distances_for_patch_point_in_microenv(
         positive_geom=marker_positive_geom,
         negative_geom=marker_negative_geom,
     )
+    
+    lines_from_point_to_patches = None
+
     try:
         lines_from_point_to_patches = _get_nearest_points_for_point(
             cell_point,
@@ -365,15 +368,19 @@ def _distances_for_patch_point_in_microenv(
         )
     except ValueError:
         print("Point Value Error")
-
-    if lines_from_point_to_patches.line_to_negative is None:
+    
+    if lines_from_point_to_patches is None:
         line_to_marker_neg = None
-    else:
-        line_to_marker_neg = lines_from_point_to_patches.line_to_negative.wkt
-    if lines_from_point_to_patches.line_to_positive is None:
         line_to_marker_pos = None
     else:
-        line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
+        if lines_from_point_to_patches.line_to_negative is None:
+            line_to_marker_neg = None
+        else:
+            line_to_marker_neg = lines_from_point_to_patches.line_to_negative.wkt
+        if lines_from_point_to_patches.line_to_positive is None:
+            line_to_marker_pos = None
+        else:
+            line_to_marker_pos = lines_from_point_to_patches.line_to_positive.wkt
 
     yield PointOutputData(
         point=cell_point.wkt,

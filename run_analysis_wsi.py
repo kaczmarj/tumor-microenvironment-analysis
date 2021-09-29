@@ -8,9 +8,7 @@ from pathlib import Path
 import os
 import time
 import typing as ty
-
 import tumor_microenv as tm
-
 
 def main(
     *,
@@ -22,7 +20,6 @@ def main(
     mpp: float = 0.34622,
     processes: int = None,
 ):
-    # data_root = Path("data_big/N9430-B11/")
     all_patch_paths = list(data_root.glob("*.npy"))
     # Sort by y then by x.
     all_patch_paths.sort(key=lambda p: p.stem.split("_")[:2][::-1])
@@ -59,7 +56,7 @@ def main(
     def run_one_roi(xy: ty.Tuple[int, int]):
         xmin, ymin = xy
         
-        if os.path.exists(os.path.join(output_dir,"{}-{}_patches.csv".format(xmin,ymin))):
+        if os.path.exists(os.path.join(output_dir,"{}-{}_patches.csv".format(xmin,ymin))) and os.path.exists(os.path.join(output_dir,"{}-{}_cells.csv".format(xmin,ymin))):
             print("Found Existing!")
             return
         
@@ -137,4 +134,4 @@ if __name__ == "__main__":
 
 
 
-# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/N9430-B11 --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/Patches --processes 20
+# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/930 --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/930 --processes 100
