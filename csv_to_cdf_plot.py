@@ -8,7 +8,7 @@ import pickle
 import glob
 
 # Parameters for Path
-slide_name = "668"
+slide_name = "1282B"
 input_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}'.format(slide_name)
 points_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_cells.csv".format(slide_name)
 patch_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_patches.csv".format(slide_name)

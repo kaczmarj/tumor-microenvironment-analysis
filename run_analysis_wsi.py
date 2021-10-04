@@ -134,4 +134,4 @@ if __name__ == "__main__":
 
 
 
-# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/930 --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/930 --processes 100
+# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/1282B --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/1282B --processes 100

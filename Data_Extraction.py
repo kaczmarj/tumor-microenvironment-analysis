@@ -12,12 +12,12 @@ import cv2
 from bson import json_util
 
 # Following codes are necessary for including patches that are annotated by Prof. Shroyer as Tumor.
+slide_name = '1282B'
 annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot/KYT_Annot/'
-patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/668-multires.tif/'
+patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/{}-multires.tif/'.format(slide_name)
 manifest_file = os.path.join(annotation_dir, 'manifest.csv')
-slide_name = '930'
-clinicaltrialsubjectid = '930'
-imageid = '930:kytnew'
+clinicaltrialsubjectid = '1282B-IHC'
+imageid = '1282B-IHC:kytnew'
 manifest = pd.read_csv(manifest_file)
 save_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/{}'.format(slide_name)
 
