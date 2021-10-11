@@ -80,15 +80,7 @@ def main(
             marker_positive=1,
             marker_negative=7,
         )
-        patches, cells, patch_midpoints = loader()
-
-        tm.find_impacted_patches(
-            patches=patches,
-            cells=patch_midpoints,
-            microenv_distances=[tumor_microenv],
-            mpp=mpp,
-            output_path=output_dir / f"{xmin}-{ymin}_patches.csv", 
-        )
+        patches, cells = loader()
 
         #cells = [c for c in cells if c.cell_type in {"cd4", "cd8", "cd16", "cd163"}]
         cells = [c for c in cells if c.cell_type in {"cd8", "cd16", "cd163"}]

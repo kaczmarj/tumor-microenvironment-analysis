@@ -2,8 +2,8 @@ import glob
 import os
 from PIL import Image
 
-region_of_interest = "ROI_19"
-patch_files = glob.glob("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/*_73_73.png".format(region_of_interest))
+region_of_interest = "ROI_1"
+patch_files = glob.glob("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/Pred/*_73_73.png".format(region_of_interest))
 patch_size = 73
 
 dict_for_sorting = {}
@@ -36,4 +36,4 @@ for patch_file in patch_files:
     patch_img = Image.open(patch_file)
     merged_image.paste(patch_img, (x, y))
 
-merged_image.save("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/merged_image.png".format(region_of_interest), "PNG")
+merged_image.save("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/Pred/merged_image.png".format(region_of_interest), "PNG")
