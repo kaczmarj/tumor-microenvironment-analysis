@@ -253,15 +253,7 @@ def get_exteriors(
 
 
 
-def get_tumor_instance_and_influence_area(patches, tumor_geom, marker_positive_geom, marker_negative_geom, output_path, microenv_micrometer, patch_size = 73):
-    tumor_exterior = _get_exterior_of_geom(tumor_geom)
-    tumor_polygon = []
-    for line in tumor_exterior:
-        new_poly = Polygon(line.coords)
-        tumor_polygon.append(new_poly)
-    
-    multi_tumor_polygon = MultiPolygon(tumor_polygon)
-
+def get_tumor_instance_and_influence_area(patches, multi_tumor_polygon, marker_positive_geom, marker_negative_geom, output_path, microenv_micrometer, patch_size = 73):
     with open(output_path, "w", newline="") as output_csv:
         patch_dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
         patch_dict_writer.writeheader()
@@ -293,9 +285,6 @@ def get_tumor_instance_and_influence_area(patches, tumor_geom, marker_positive_g
                     patch_row = PointOutputData(point=point.wkt, dist_to_marker_neg=distances.dnegative, dist_to_marker_pos=distances.dpositive, line_to_marker_neg=line_to_marker_neg,
                         line_to_marker_pos=line_to_marker_pos, cell_type= "patch", cell_uuid="patch_id", microenv_micrometer=microenv_micrometer,)
                     patch_dict_writer.writerow(patch_row._asdict())
-
-
-
             
 
 def run_spatial_analysis(
@@ -354,12 +343,22 @@ def run_spatial_analysis(
     marker_negative_geom = exteriors["marker_negative"]
     del marker_positive_patches, marker_negative_patches
 
+    tumor_polygon = []
+    for line in tumor_exterior:
+        multi_tumor_polygon = MultiPolygon(tumor_polygon)
+        new_poly = Polygon(line.coords)
+        if multi_tumor_polygon.contains(new_poly):
+            print("Tumor Polygon found inside another one")
+        else:
+            tumor_polygon.append(new_poly)
+    multi_tumor_polygon = MultiPolygon(tumor_polygon)    
+
     with open(output_path, "w", newline="") as output_csv:
         dict_writer = csv.DictWriter(output_csv, fieldnames=PointOutputData._fields)
         dict_writer.writeheader()
 
         for distance_um in microenv_distances:
-            get_tumor_instance_and_influence_area(patches, tumor_geom, marker_positive_geom, marker_negative_geom, output_patch_path, distance_um)
+            # get_tumor_instance_and_influence_area(patches, multi_tumor_polygon, marker_positive_geom, marker_negative_geom, output_patch_path, distance_um)
             distance_px = round(distance_um / mpp)
             print(f"Working on distance = {distance_um} um ({distance_px} px)")
             tumor_microenv = tumor_exterior.buffer(distance=distance_px)
@@ -377,7 +376,7 @@ def run_spatial_analysis(
                 cell
                 for cell in cells
                 if tumor_microenv.contains(cell.polygon)
-                and not tumor_geom.contains(cell.polygon)
+                and not multi_tumor_polygon.contains(cell.polygon)
             ]
             # print("Calculating distances for each cell...")
             for cell in tqdm(cells_in_microenv, disable=not progress_bar):
@@ -804,34 +803,46 @@ def cv2_add_patch_exteriors(
     neg_patches = translate(neg_patches, xoff=xoff, yoff=yoff)
     exts = get_exteriors(tum_patches, pos_patches, neg_patches)
 
-    # color_negative = (255, 255, 0)  # cyan (bgr)
-    # color_positive = (42, 42, 165)  # brown (bgr)
+    tumor_exterior: MultiLineString = exts["tumor"]
+    tumor_polygon = []
+    for line in tumor_exterior:
+        multi_tumor_polygon = MultiPolygon(tumor_polygon)
+        new_poly = Polygon(line.coords)
+        if multi_tumor_polygon.contains(new_poly):
+            print("Tumor Polygon found inside another one")
+        else:
+            tumor_polygon.append(new_poly)
+    multi_tumor_polygon = MultiPolygon(tumor_polygon)
 
     if exts["marker_negative"] is not None:
         for line in exts["marker_negative"]:
             coords = list(zip(*line.xy))
             assert len(coords) == 2
             coords = [(int(x), int(y)) for x, y in coords]
-            image = cv2.line(
-                image,
-                coords[0],
-                coords[1],
-                color_negative,
-                thickness=line_thickness,
-            )
+            point1, point2 = Point(coords[0]), Point(coords[1])
+            if not (multi_tumor_polygon.contains(point1.buffer(5)) or multi_tumor_polygon.contains(point2.buffer(5))):                
+                image = cv2.line(
+                    image,
+                    coords[0],
+                    coords[1],
+                    color_negative,
+                    thickness=line_thickness,
+                )
 
     if exts["marker_positive"] is not None:
         for line in exts["marker_positive"]:
             coords = list(zip(*line.xy))
             assert len(coords) == 2
             coords = [(int(x), int(y)) for x, y in coords]
-            image = cv2.line(
-                image,
-                coords[0],
-                coords[1],
-                color_positive,
-                thickness=line_thickness,
-            )
+            point1, point2 = Point(coords[0]), Point(coords[1])
+            if not (multi_tumor_polygon.contains(point1.buffer(5)) or multi_tumor_polygon.contains(point2.buffer(5))):
+                image = cv2.line(
+                    image,
+                    coords[0],
+                    coords[1],
+                    color_positive,
+                    thickness=line_thickness,
+                )
 
     return image
 

@@ -11,18 +11,19 @@ from shutil import copyfile
 from scipy.misc import imresize
 import cv2
 
-annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot_jakub'
-patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_145_145/N9430-B11-multires.tif/'
+# Path Parameters for Annotation
+annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot/KYT_ANNOT/'
+patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/3372-multires.tif/'
 manifest_file = os.path.join(annotation_dir, 'manifest.csv')
-slide_name = 'N9430-B11'
-clinicaltrialsubjectid = 'N9430'
-imageid = 'B11'
+slide_name = '3372'
+clinicaltrialsubjectid = '3372'
+imageid = '3372:kytnew'
 manifest = pd.read_csv(manifest_file)
 jakub_roi = []
 
-# Path parameters
-segmentation_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result/WSI/WSI_145_145/Anchor_UNET"
-wsi_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi/SBU"
+# Path parameters for Segmentation
+segmentation_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/WSI/wsi_patch_146_146/Anchor_UNET/KYT/"
+wsi_input_directory = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi/KYT/"
 wsi_filename = os.path.join(wsi_input_directory,'{}-multires.tif'.format(slide_name))
 predicted_segmentation_files = glob.glob(os.path.join(segmentation_input_directory,"{}-multires.tif/*.npy".format(slide_name)))
 patch_size = 146
@@ -147,7 +148,7 @@ def divide_patches(pred_file, pred_file_npy, img_file, dest_path):
     json_save(fourth_pred, fourth_pred_json)
 
 
-dest_dir = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/{}".format(slide_name)
+dest_dir = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/{}".format(slide_name)
 
 if not os.path.exists(dest_dir):
     os.mkdir(dest_dir)
@@ -163,7 +164,6 @@ for single_poly in jakub_polygon:
         os.mkdir(dest_path)   
     for predicted_segmentation_file in predicted_segmentation_files:
         base_name = os.path.basename(predicted_segmentation_file)
-        #print(base_name)
         x, y, patch_original_size, patch_resized_size, _ = base_name.split('_')
         x, y, patch_resized_size = int(x), int(y), int(patch_resized_size)
         rectangle_coordinates = [(x/slide_width, y/slide_height), ((x+patch_resized_size)/slide_width, y/slide_height), ((x+patch_resized_size)/slide_width, (y+patch_resized_size)/slide_height), ((x)/slide_width,(y+patch_resized_size)/slide_height)]

@@ -10,12 +10,12 @@ from shapely.wkt import loads
 from shapely.affinity import translate
 from shapely.geometry import LineString
 
-input_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/ROI_1")
-output_dir = Path("./temp")
-influence_point_path = Path("./temp/35917-23945_patches.csv")
+input_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1")
+output_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Synthetic")
 tumor_microenv = 100
 mpp = 0.34622
-xoff, yoff = 35917, 23945
+offset_path = input_dir / "offset.txt"
+xoff, yoff = map(int, offset_path.read_text().split())
 color_negative = (0, 128, 128)
 color_positive = (139, 69, 19)
 patch_size = 73
@@ -23,9 +23,12 @@ patch_size = 73
 patch_npy_files = input_dir.glob("*.npy")
 cell_json_files = input_dir.glob("*.json")
 
+if not os.path.exists(output_dir):
+    os.mkdir(output_dir)
 
-# patches, cells = tm.LoaderV1(patch_npy_files, cell_json_files, background=0, marker_positive=1, marker_negative=7,)()
-# tm.run_spatial_analysis(patches=patches, cells=cells, microenv_distances=[tumor_microenv], mpp=mpp, output_path=Path('./temp') / f"{xoff}-{yoff}_cells.csv", output_patch_path=Path('./temp') / f"{xoff}-{yoff}_patches.csv", progress_bar=True)
+
+patches, cells = tm.LoaderV1(patch_npy_files, cell_json_files, background=0, marker_positive=1, marker_negative=7, tumor_threshold=.15)()
+tm.run_spatial_analysis(patches=patches, cells=cells, microenv_distances=[tumor_microenv], mpp=mpp, output_path=output_dir / f"{xoff}-{yoff}_cells.csv", output_patch_path=output_dir / f"{xoff}-{yoff}_patches.csv", progress_bar=True)
 
 
 merged_image_path = input_dir / "merged_image.png"
@@ -35,18 +38,17 @@ merged_image = cv2.cvtColor(merged_image, cv2.COLOR_BGR2RGB)
 canvas = np.zeros(merged_image.shape,dtype=np.uint8)
 canvas += 255
 
-patches, _ = tm.LoaderV1(patch_npy_files, cell_json_files, background=0, marker_positive=1, marker_negative=7,)()
-# merged_image_with_border = tm.cv2_add_patch_exteriors(merged_image, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=10, color_negative = color_negative, color_positive = color_positive)
+# # merged_image_with_border = tm.cv2_add_patch_exteriors(merged_image, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=10, color_negative = color_negative, color_positive = color_positive)
 canvas = tm.cv2_add_patch_exteriors(canvas, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=10, color_negative = color_negative, color_positive = color_positive)
 
-# cv2.imwrite(str(output_dir / f'real_image_with_tumor_boundary.png'), cv2.cvtColor(merged_image_with_border, cv2.COLOR_RGB2BGR))
+# # cv2.imwrite(str(output_dir / f'real_image_with_tumor_boundary.png'), cv2.cvtColor(merged_image_with_border, cv2.COLOR_RGB2BGR))
 
 
 brown_gradient = [(118, 92, 71), (146, 115, 89), (196, 156, 124), (246, 199, 160), (255, 213, 178)]
 cyan_gradient = [(5, 61, 139), (17, 100, 176), (41, 139, 200), (63, 183, 219), (92, 213, 232)]
 red_gradient = [(241, 29, 40), (253, 58, 45), (254, 97, 44), (255, 135, 44), (255, 161, 44)]
 line_thickness = 2
-
+influence_point_path = str(output_dir / f"{xoff}-{yoff}_patches.csv")
 influence_points = pd.read_csv(influence_point_path)
 influence_points.loc[:, "dist_to_marker_neg"] *= mpp
 influence_points.loc[:, "dist_to_marker_pos"] *= mpp

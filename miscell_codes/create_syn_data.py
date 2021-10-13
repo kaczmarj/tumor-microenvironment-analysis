@@ -20,36 +20,45 @@ from shapely.wkt import loads
 from shapely.geometry import LineString
 import pickle
 
-input_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/ROI_1")
+input_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1")
+output_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Synthetic")
 patch_npy_files = input_dir.glob("*.npy")
+merged_image_path = input_dir / "merged_image.png"
+offset_path = input_dir / "offset.txt"
+
 tumor_microenv = 100
 mpp = 0.34622
-xoff, yoff = 35917, 23945
+xoff, yoff = map(int, offset_path.read_text().split())
 color_negative = (0, 128, 128)
 color_positive = (139, 69, 19)
 patch_size = 73
+influence_point_path = str(output_dir / f"{xoff}-{yoff}_patches.csv")
 
-
-merged_image_path = input_dir / "merged_image.png"
 merged_image = cv2.imread(str(merged_image_path))
 merged_image = cv2.cvtColor(merged_image, cv2.COLOR_BGR2RGB)
 
 canvas = np.zeros(merged_image.shape,dtype=np.uint8)
 canvas += 255
 
-patches, _ = tm.LoaderV1(patch_npy_files, [], background=0, marker_positive=1, marker_negative=7,)()
+patches, _ = tm.LoaderV1(patch_npy_files, [], background=0, marker_positive=1, marker_negative=7, tumor_threshold=.15)()
 canvas = tm.cv2_add_patch_exteriors(canvas, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=5, color_negative = color_negative, color_positive = color_positive)
+merged_image = tm.cv2_add_patch_exteriors(merged_image, patches=patches, xoff=-xoff, yoff=-yoff, line_thickness=5, color_negative = color_negative, color_positive = color_positive)
 
+cv2.imwrite(str(output_dir / f'original_image_with_border.png'), cv2.cvtColor(merged_image, cv2.COLOR_RGB2BGR))
+# cv2.imwrite(str(output_dir / f'image_with_border.png'), cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR))
 
 tumor_patches = [p.polygon for p in patches if p.patch_type == tm.PatchType.TUMOR]
 tumor_geom = unary_union(tumor_patches)
 tumor_exterior = tm._get_exterior_of_geom(tumor_geom)
 tumor_polygon = []
 for line in tumor_exterior:
+    multi_tumor_polygon = MultiPolygon(tumor_polygon)
     new_poly = Polygon(line.coords)
-    tumor_polygon.append(new_poly)
-
-multi_tumor_polygon = MultiPolygon(tumor_polygon)
+    if multi_tumor_polygon.contains(new_poly):
+        print("Tumor Polygon found inside another one")
+    else:
+        tumor_polygon.append(new_poly)
+multi_tumor_polygon = MultiPolygon(tumor_polygon) 
 
 cells: tm.Cells = []
 
@@ -70,7 +79,7 @@ def generate_random_cells(canvas, number_of_cells, cell_radius, cell_type):
         random_point = Point(rand_x + xoff, rand_y + yoff)
         circle = random_point.buffer(cell_radius)
         polygon = Polygon(circle.exterior.coords)
-        if not multi_tumor_polygon.buffer(10).intersects(polygon):
+        if not multi_tumor_polygon.buffer(1).intersects(polygon):
             cv2.circle(canvas, center=(rand_x, rand_y), radius=cell_radius, color=stain_to_color[cell_type], thickness=-1)
             cells.append(tm.Cell(polygon=polygon, cell_type=cell_type, uuid=0,))
             cell_count += 1
@@ -83,13 +92,14 @@ lymph_count = generate_random_cells(canvas, 300, lymph_cell_radius, 'cd8')
 cd16_count = generate_random_cells(canvas, 300, macrophages_cell_radius, 'cd16')
 cd163_count = generate_random_cells(canvas, 300, macrophages_cell_radius, 'cd163')
 
-print(lymph_count, cd16_count, cd163_count)
+with open(output_dir / "random_point_count.txt", "w") as f:
+    f.write("Lymph - {}\n".format(lymph_count))
+    f.write("CD16 - {}\n".format(cd16_count))
+    f.write("CD163 - {}".format(cd163_count))
+    f.close()
 
-# cv2.imwrite('./temp/border_with_random_points.png', cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR))
+tm.run_spatial_analysis(patches=patches, cells=cells, microenv_distances=[tumor_microenv], mpp=mpp, output_path=output_dir / f"{xoff}-{yoff}_virtual_cells.csv", output_patch_path=output_dir / f"{xoff}-{yoff}_patches.csv", progress_bar=True)
 
-
-influence_point_path = Path("./temp/35917-23945_patches.csv")
-output_dir = Path("./temp")
 
 brown_gradient = [(118, 92, 71), (146, 115, 89), (196, 156, 124), (246, 199, 160), (255, 213, 178)]
 cyan_gradient = [(5, 61, 139), (17, 100, 176), (41, 139, 200), (63, 183, 219), (92, 213, 232)]

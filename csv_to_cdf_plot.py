@@ -14,7 +14,10 @@ import math
 # points_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_cells.csv".format(slide_name)
 # patch_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_patches.csv".format(slide_name)
 # output_dir = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/Hist_CDF".format(slide_name)
-output_dir = './temp/hists/real/'
+input_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Synthetic/'
+output_dir = input_dir + 'virtual'
+points_csv = input_dir + '23945-11973_virtual_cells.csv'
+patch_csv = input_dir + '23945-11973_patches.csv'
 
 # # Combine Cells CSV files
 # all_filenames = glob.glob(input_dir+'/*_cells.csv')
@@ -94,11 +97,11 @@ def draw_hist(neg_hist, pos_hist, cell_type, normalization, dest_dir):
     if normalization == 'normalized_by_Avg_Area':
         ax.set_ylabel('Approximate Cell Count')
     elif normalization == 'normalized_by_Influence_Area':
-        ax.set_ylabel('Cell Area and Influence Area Ratio (Pixels)')
-    elif normalization == 'Distribution':
-        ax.set_ylabel('Cumulative Patch Areas in Each Band (Pixels)')
+        ax.set_ylabel('Cell Area and Influence Area Ratio (Microns)')
+    elif normalization == 'Area':
+        ax.set_ylabel('Cumulative Patch Areas in Each Band (Microns)')
     elif normalization == 'Cell_Area':
-        ax.set_ylabel('Cumulative Cell Areas in Each Band (Pixels)')
+        ax.set_ylabel('Cumulative Cell Areas in Each Band (Microns)')
     ax.set_xlabel('Distances in Microns')
     ax.set_title('{} distributon {}'.format(cell_type, normalization))
     ax.set_xticks(x)
@@ -107,32 +110,6 @@ def draw_hist(neg_hist, pos_hist, cell_type, normalization, dest_dir):
     fig.tight_layout()
     plt.savefig(os.path.join(dest_dir,'{}_{}_hist.png'.format(cell_type, normalization)), dpi=300, format='png', bbox_inches='tight')
 
-
-def histogram_calc_patch_points(patch_points_pos, patch_points_neg):
-    hist_pos = bin_range_dict.copy()
-    hist_neg = bin_range_dict.copy()
-    patch_points_pos = np.asarray(patch_points_pos)
-    patch_points_neg = np.asarray(patch_points_neg)
-    for pos, neg in zip(patch_points_pos, patch_points_neg):
-        if pos>0 and pos<neg:
-            if int(pos/bin_range)>number_of_bin-1:
-                continue
-            else:
-                hist_pos[int(pos/bin_range)] += 1
-
-        elif neg>0 and neg<pos:
-            if int(neg/bin_range)>number_of_bin-1:
-                continue
-            else:
-                hist_neg[int(neg/bin_range)] += 1
-
-        elif pos>0 and neg>0 and pos == neg:
-            if int(neg/bin_range)>number_of_bin-1:
-                continue                
-            else:
-                hist_neg[int(neg/bin_range)] += 1
-                hist_pos[int(pos/bin_range)] += 1
-    return hist_pos, hist_neg
 
 def normalize_by_avg_cell_area(neg_hist, pos_hist, cell_type):
     neg_hist_normalized = neg_hist.copy()
@@ -149,9 +126,25 @@ def normalize_by_avg_cell_area(neg_hist, pos_hist, cell_type):
 
 
 def normalize_by_environment_influence(neg_hist, pos_hist, neg_patch_hist, pos_patch_hist):
-    neg_hist_normalized = {k: neg_hist[k] / neg_patch_hist[k] for k in neg_patch_hist}
-    pos_hist_normalized = {k: pos_hist[k] / pos_patch_hist[k] for k in pos_patch_hist}
+    neg_hist_normalized = {k: (neg_hist[k] / neg_patch_hist[k])*mpp for k in neg_patch_hist}
+    pos_hist_normalized = {k: (pos_hist[k] / pos_patch_hist[k])*mpp for k in pos_patch_hist}
     return neg_hist_normalized, pos_hist_normalized
+
+
+def histogram_calc_patch_points(patch_points_pos, patch_points_neg):
+    hist_pos = bin_range_dict.copy()
+    hist_neg = bin_range_dict.copy()
+    patch_points_pos = np.asarray(patch_points_pos)
+    patch_points_neg = np.asarray(patch_points_neg)
+    for pos, neg in zip(patch_points_pos, patch_points_neg):
+        if neg == pos and int(neg/bin_range)<=number_of_bin-1:
+            hist_neg[int(neg/bin_range)] += 1
+            hist_pos[int(pos/bin_range)] += 1
+        elif pos < neg and int(pos/bin_range)<=number_of_bin-1:
+            hist_pos[int(pos/bin_range)] += 1
+        elif neg < pos and int(neg/bin_range)<=number_of_bin-1:
+            hist_neg[int(neg/bin_range)] += 1
+    return hist_pos, hist_neg
 
 
 def histogram_calc_cell_points(neg_cell_points, pos_cell_points, cell_type, dest_dir):
@@ -162,18 +155,6 @@ def histogram_calc_cell_points(neg_cell_points, pos_cell_points, cell_type, dest
     pos_cell_points = np.asarray(pos_cell_points)
     neg_cell_point_hist = bin_range_dict.copy()
     pos_cell_point_hist = bin_range_dict.copy()
-
-    # for neg_val in neg_cell_points:
-    #     if int(neg_val/bin_range)>number_of_bin-1:
-    #         continue
-    #     else:
-    #         neg_cell_point_hist[int(neg_val/bin_range)] += 1
-
-    # for pos_val in pos_cell_points:
-    #     if int(pos_val/bin_range)>number_of_bin-1:
-    #         continue
-    #     else:
-    #         pos_cell_point_hist[int(pos_val/bin_range)] += 1
 
     for neg_val, pos_val in zip(neg_cell_points, pos_cell_points):
         if neg_val == pos_val and int(neg_val/bin_range)<=number_of_bin-1:
@@ -188,71 +169,44 @@ def histogram_calc_cell_points(neg_cell_points, pos_cell_points, cell_type, dest
 
 
 
-# def get_and_draw_histograms_cdfs(points_csv, patch_csv, dest_dir, mpp = 0.34622):
-#     # Read Cell Points and Patch Points from CSV
-#     cell_points = pd.read_csv(points_csv)
-#     patch_points = pd.read_csv(patch_csv)
-
-#     # Transform distance from pixel distance to micron distance
-#     cell_points.loc[:, "dist_to_marker_neg"] *= mpp
-#     cell_points.loc[:, "dist_to_marker_pos"] *= mpp
-#     patch_points.loc[:, "dist_to_marker_neg"] *= mpp
-#     patch_points.loc[:, "dist_to_marker_pos"] *= mpp
-#     cell_types = ["cd8", "cd16", "cd163"]
-#     pos_patch_hist, neg_patch_hist = histogram_calc_patch_points(patch_points.loc[:, "dist_to_marker_pos"], patch_points.loc[:, "dist_to_marker_neg"])
-#     draw_hist(neg_patch_hist, pos_patch_hist, 'Patch', 'Distribution', dest_dir)
-#     patch_hist_dict = {'neg_patch_hist' : neg_patch_hist, 'pos_patch_hist': pos_patch_hist}
-#     pickle.dump(patch_hist_dict, open(os.path.join(dest_dir,'patch.pkl'), "wb"))
-
-#     for cell_type in cell_types:
-#         neg_cell_point_hist, pos_cell_point_hist = histogram_calc_cell_points(cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"].dropna(), cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"].dropna(), cell_type, output_dir)
-#         if cell_type == 'cd8':
-#             cell_type = 'Lymph'
-#         cell_hist_dict = {'neg_cell_point_hist' : neg_cell_point_hist, 'pos_cell_point_hist': pos_cell_point_hist}
-#         pickle.dump(cell_hist_dict,  open(os.path.join(dest_dir,'{}.pkl'.format(cell_type)), "wb"))
-
-#         # Normalization by Avg Cell Area
-#         neg_hist_normalized_by_area, pos_hist_normalized_by_area = normalize_by_avg_cell_area(neg_cell_point_hist, pos_cell_point_hist, cell_type)
-#         draw_hist(neg_hist_normalized_by_area, pos_hist_normalized_by_area, cell_type, 'normalized_by_Avg_Area', dest_dir)
-#         draw_cdf(neg_hist_normalized_by_area, pos_hist_normalized_by_area, dest_dir, '{}_normalized_by_Avg_Area'.format(cell_type))
-
-#         # Normalization by Environment Influence
-#         neg_hist_normalized_by_env, pos_hist_normalized_by_env = normalize_by_environment_influence(neg_cell_point_hist, pos_cell_point_hist, neg_patch_hist, pos_patch_hist)
-#         draw_hist(neg_hist_normalized_by_env, pos_hist_normalized_by_env, cell_type, 'normalized_by_Influence_Area', dest_dir)
-#         draw_cdf(neg_hist_normalized_by_env, pos_hist_normalized_by_env, dest_dir, '{}_normalized_by_Influence_Area'.format(cell_type))
-
-# get_and_draw_histograms_cdfs(points_csv, patch_csv, output_dir, mpp = mpp)
-
-
-
-
-
-def get_and_draw_histograms_cdfs(points_csv, dest_dir, mpp = 0.34622):
+def get_and_draw_histograms_cdfs(points_csv, patch_csv, dest_dir, mpp = 0.34622):
     # Read Cell Points and Patch Points from CSV
     cell_points = pd.read_csv(points_csv)
+    patch_points = pd.read_csv(patch_csv)
 
     # Transform distance from pixel distance to micron distance
     cell_points.loc[:, "dist_to_marker_neg"] *= mpp
     cell_points.loc[:, "dist_to_marker_pos"] *= mpp
+    patch_points.loc[:, "dist_to_marker_neg"] *= mpp
+    patch_points.loc[:, "dist_to_marker_pos"] *= mpp
     cell_types = ["cd8", "cd16", "cd163"]
-    pos_patch_hist, neg_patch_hist = {0: 1530, 1: 788, 2: 573, 3: 160}, {0: 411, 1: 210, 2: 166, 3: 60}
+    pos_patch_hist, neg_patch_hist = histogram_calc_patch_points(patch_points.loc[:, "dist_to_marker_pos"], patch_points.loc[:, "dist_to_marker_neg"])
+    pos_patch_hist_micron, neg_patch_hist_micron = {}, {}
     for key in pos_patch_hist.keys():
         pos_patch_hist[key] = int(pos_patch_hist[key]*(73*73))
+        pos_patch_hist_micron[key] = int(pos_patch_hist[key]*(73*73)*mpp)
         neg_patch_hist[key] = int(neg_patch_hist[key]*(73*73))
+        neg_patch_hist_micron[key] = int(neg_patch_hist[key]*(73*73)*mpp)
+    
+    draw_hist(neg_patch_hist_micron, pos_patch_hist_micron, 'Influence', 'Area', dest_dir)
 
-    draw_hist(neg_patch_hist, pos_patch_hist, 'Patch', 'Distribution', dest_dir)
     patch_hist_dict = {'neg_patch_hist' : neg_patch_hist, 'pos_patch_hist': pos_patch_hist}
-    # pickle.dump(patch_hist_dict, open(os.path.join(dest_dir,'patch.pkl'), "wb"))
+    pickle.dump(patch_hist_dict, open(os.path.join(dest_dir,'patch.pkl'), "wb"))
 
     for cell_type in cell_types:
-        neg_cell_point_hist, pos_cell_point_hist = histogram_calc_cell_points(cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"], cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"], cell_type, output_dir)
+        neg_cell_point_hist, pos_cell_point_hist = histogram_calc_cell_points(cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_neg"].dropna(), cell_points.query(f"cell_type=='{cell_type}'").loc[:, "dist_to_marker_pos"].dropna(), cell_type, output_dir)
         if cell_type == 'cd8':
             cell_type = 'Lymph'
+
+        neg_cell_point_hist_microns, pos_cell_point_hist_microns = {}, {}
+        for key in neg_cell_point_hist.keys():
+            neg_cell_point_hist_microns[key] = int(neg_cell_point_hist[key]*mpp)
+            pos_cell_point_hist_microns[key] = int(pos_cell_point_hist[key]*mpp)
+        draw_hist(neg_cell_point_hist_microns, pos_cell_point_hist_microns, '{} Cumulative'.format(cell_type), 'Cell_Area', dest_dir)
+
         cell_hist_dict = {'neg_cell_point_hist' : neg_cell_point_hist, 'pos_cell_point_hist': pos_cell_point_hist}
-        # pickle.dump(cell_hist_dict,  open(os.path.join(dest_dir,'{}.pkl'.format(cell_type)), "wb"))
-
-        draw_hist(neg_cell_point_hist, pos_cell_point_hist, cell_type, 'Cell_Area', dest_dir)
-
+        pickle.dump(cell_hist_dict,  open(os.path.join(dest_dir,'{}.pkl'.format(cell_type)), "wb"))
+        
         # Normalization by Avg Cell Area
         neg_hist_normalized_by_area, pos_hist_normalized_by_area = normalize_by_avg_cell_area(neg_cell_point_hist, pos_cell_point_hist, cell_type)
         draw_hist(neg_hist_normalized_by_area, pos_hist_normalized_by_area, cell_type, 'normalized_by_Avg_Area', dest_dir)
@@ -263,4 +217,4 @@ def get_and_draw_histograms_cdfs(points_csv, dest_dir, mpp = 0.34622):
         draw_hist(neg_hist_normalized_by_env, pos_hist_normalized_by_env, cell_type, 'normalized_by_Influence_Area', dest_dir)
         draw_cdf(neg_hist_normalized_by_env, pos_hist_normalized_by_env, dest_dir, '{}_normalized_by_Influence_Area'.format(cell_type))
 
-get_and_draw_histograms_cdfs('./temp/35917-23945_cells.csv', output_dir, mpp = mpp)
+get_and_draw_histograms_cdfs(points_csv, patch_csv, output_dir, mpp = mpp)

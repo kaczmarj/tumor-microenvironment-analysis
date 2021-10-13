@@ -3,7 +3,7 @@ import os
 from PIL import Image
 
 region_of_interest = "ROI_1"
-patch_files = glob.glob("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/Pred/*_73_73.png".format(region_of_interest))
+patch_files = glob.glob("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/{}/*_73_73.png".format(region_of_interest))
 patch_size = 73
 
 dict_for_sorting = {}
@@ -23,7 +23,7 @@ offset_y = sorted(dict_for_sorting[offset_x])[0]
 
 multiple = len(dict_for_sorting.keys())
 
-with open("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/offset.txt".format(region_of_interest),"w") as f:
+with open("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/{}/offset.txt".format(region_of_interest),"w") as f:
     f.write("{} {}".format(offset_x,offset_y))
     f.close()
 
@@ -36,4 +36,4 @@ for patch_file in patch_files:
     patch_img = Image.open(patch_file)
     merged_image.paste(patch_img, (x, y))
 
-merged_image.save("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/N9430-B11/{}/Pred/merged_image.png".format(region_of_interest), "PNG")
+merged_image.save("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/{}/merged_image.png".format(region_of_interest), "PNG")
