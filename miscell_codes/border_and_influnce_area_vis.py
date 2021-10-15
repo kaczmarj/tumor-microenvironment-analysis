@@ -10,8 +10,8 @@ from shapely.wkt import loads
 from shapely.affinity import translate
 from shapely.geometry import LineString
 
-input_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1")
-output_dir = Path("/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Synthetic")
+input_dir = Path("/data02/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3739/ROI_1")
+output_dir = Path("/data02/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3739/ROI_1/Analysis")
 tumor_microenv = 100
 mpp = 0.34622
 offset_path = input_dir / "offset.txt"

@@ -13,11 +13,11 @@ import cv2
 
 # Path Parameters for Annotation
 annotation_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/annot/KYT_ANNOT/'
-patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/3372-multires.tif/'
+patch_directory = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/wsi_patch_146_146/KYT/1092A-multires.tif/'
 manifest_file = os.path.join(annotation_dir, 'manifest.csv')
-slide_name = '3372'
-clinicaltrialsubjectid = '3372'
-imageid = '3372:kytnew'
+slide_name = '1092A'
+clinicaltrialsubjectid = '1092A-IHC'
+imageid = '1092A-IHC:kytnew'
 manifest = pd.read_csv(manifest_file)
 jakub_roi = []
 
@@ -148,7 +148,7 @@ def divide_patches(pred_file, pred_file_npy, img_file, dest_path):
     json_save(fourth_pred, fourth_pred_json)
 
 
-dest_dir = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/{}".format(slide_name)
+dest_dir = "/data02/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/{}".format(slide_name)
 
 if not os.path.exists(dest_dir):
     os.mkdir(dest_dir)

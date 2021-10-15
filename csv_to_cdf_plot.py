@@ -14,7 +14,7 @@ import math
 # points_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_cells.csv".format(slide_name)
 # patch_csv = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/combined_patches.csv".format(slide_name)
 # output_dir = "/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/{}/Hist_CDF".format(slide_name)
-input_dir = '/data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Synthetic/'
+input_dir = '/data02/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Analysis/'
 output_dir = input_dir + 'virtual'
 points_csv = input_dir + '23945-11973_virtual_cells.csv'
 patch_csv = input_dir + '23945-11973_patches.csv'
@@ -183,9 +183,15 @@ def get_and_draw_histograms_cdfs(points_csv, patch_csv, dest_dir, mpp = 0.34622)
     pos_patch_hist, neg_patch_hist = histogram_calc_patch_points(patch_points.loc[:, "dist_to_marker_pos"], patch_points.loc[:, "dist_to_marker_neg"])
     pos_patch_hist_micron, neg_patch_hist_micron = {}, {}
     for key in pos_patch_hist.keys():
-        pos_patch_hist[key] = int(pos_patch_hist[key]*(73*73))
+        if pos_patch_hist[key] == 0:
+            pos_patch_hist[key] = int(pos_patch_hist[key]*(73*73))+1
+        else:
+            pos_patch_hist[key] = int(pos_patch_hist[key]*(73*73))
         pos_patch_hist_micron[key] = int(pos_patch_hist[key]*(73*73)*mpp)
-        neg_patch_hist[key] = int(neg_patch_hist[key]*(73*73))
+        if neg_patch_hist[key] == 0:    
+            neg_patch_hist[key] = int(neg_patch_hist[key]*(73*73))+1
+        else:
+            neg_patch_hist[key] = int(neg_patch_hist[key]*(73*73))
         neg_patch_hist_micron[key] = int(neg_patch_hist[key]*(73*73)*mpp)
     
     draw_hist(neg_patch_hist_micron, pos_patch_hist_micron, 'Influence', 'Area', dest_dir)
@@ -217,4 +223,73 @@ def get_and_draw_histograms_cdfs(points_csv, patch_csv, dest_dir, mpp = 0.34622)
         draw_hist(neg_hist_normalized_by_env, pos_hist_normalized_by_env, cell_type, 'normalized_by_Influence_Area', dest_dir)
         draw_cdf(neg_hist_normalized_by_env, pos_hist_normalized_by_env, dest_dir, '{}_normalized_by_Influence_Area'.format(cell_type))
 
-get_and_draw_histograms_cdfs(points_csv, patch_csv, output_dir, mpp = mpp)
+# get_and_draw_histograms_cdfs(points_csv, patch_csv, output_dir, mpp = mpp)
+
+
+
+
+def draw_hist_y_axis(neg_hist, pos_hist, cell_type, normalization, dest_dir, y_val):
+    plt.clf()
+    labels = label_for_draw
+    neg_y = neg_hist.values()
+    pos_y = pos_hist.values()
+    max_neg = max(neg_y)
+    max_pos = max(pos_y)
+    max_freq = max(max_neg, max_pos)
+    x = np.arange(len(labels))
+    width = 0.35
+    fig, ax = plt.subplots()
+    neg_rects = ax.bar(x - width/2, neg_y, width, label='K17-', edgecolor='Black')
+    pos_rects = ax.bar(x + width/2, pos_y, width, label='K17+', edgecolor='Black')
+    show_values_on_bars(ax, max_freq)
+    if normalization == 'normalized_by_Avg_Area':
+        ax.set_ylabel('Approximate Cell Count')
+    elif normalization == 'normalized_by_Influence_Area':
+        ax.set_ylabel('Cell Area and Influence Area Ratio (Microns)')
+    elif normalization == 'Area':
+        ax.set_ylabel('Cumulative Patch Areas in Each Band (Microns)')
+    elif normalization == 'Cell_Area':
+        ax.set_ylabel('Cumulative Cell Areas in Each Band (Microns)')
+    ax.set_xlabel('Distances in Microns')
+    ax.set_title('{} distributon {}'.format(cell_type, normalization))
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylim([0,y_val])
+    ax.legend()
+    fig.tight_layout()
+    plt.savefig(os.path.join(dest_dir,'{}_{}_hist.png'.format(cell_type, normalization)), dpi=300, format='png', bbox_inches='tight')
+
+
+
+input_dir = '/data02/shared/mahmudul/Sbu_Kyt_Pdac_merged/Codes/Tumor_Mirco_Env_Data/low_k17/3372/ROI_1/Analysis/'
+output_dir = input_dir + 'combined'
+real_file = input_dir + 'real/'
+virtual_file = input_dir + 'virtual/'
+patch_file = input_dir + 'real/patch.pkl'
+patches = pickle.load(open(patch_file,'rb'))
+neg_patch_hist = patches['neg_patch_hist']
+pos_patch_hist = patches['pos_patch_hist']
+def draw_real_synth_together():
+    cell_types = ["cd8", "cd16", "cd163"]
+    for cell_type in cell_types:
+        if cell_type == 'cd8':
+            cell_type = 'Lymph'
+        real_data = pickle.load(open(real_file+cell_type+'.pkl','rb'))
+        virtual_data = pickle.load(open(virtual_file+cell_type+'.pkl','rb'))
+        real_neg_cell_point_hist = real_data['neg_cell_point_hist']
+        real_pos_cell_point_hist = real_data['pos_cell_point_hist']
+        virtual_neg_cell_point_hist = virtual_data['neg_cell_point_hist']
+        virtual_pos_cell_point_hist = virtual_data['pos_cell_point_hist']
+        real_neg_hist_normalized_by_area, real_pos_hist_normalized_by_area = normalize_by_avg_cell_area(real_neg_cell_point_hist, real_pos_cell_point_hist, cell_type)
+        virtual_neg_hist_normalized_by_area, virtual_pos_hist_normalized_by_area = normalize_by_avg_cell_area(virtual_neg_cell_point_hist, virtual_pos_cell_point_hist, cell_type)
+        y_max_axis = max(max(real_neg_hist_normalized_by_area.values()), max(real_pos_hist_normalized_by_area.values()), max(virtual_neg_hist_normalized_by_area.values()), max(virtual_pos_hist_normalized_by_area.values()))
+        y_max_axis += int(math.ceil(y_max_axis/100))
+        draw_hist_y_axis(real_neg_hist_normalized_by_area, real_pos_hist_normalized_by_area, cell_type, 'normalized_by_Avg_Area', real_file, y_max_axis)
+        draw_hist_y_axis(virtual_neg_hist_normalized_by_area, virtual_pos_hist_normalized_by_area, cell_type, 'normalized_by_Avg_Area', virtual_file, y_max_axis)
+
+        real_neg_hist_normalized_by_env, real_pos_hist_normalized_by_env = normalize_by_environment_influence(real_neg_cell_point_hist, real_pos_cell_point_hist, neg_patch_hist, pos_patch_hist)
+        virtual_neg_hist_normalized_by_env, virtual_pos_hist_normalized_by_env = normalize_by_environment_influence(virtual_neg_cell_point_hist, virtual_pos_cell_point_hist, neg_patch_hist, pos_patch_hist)
+        y_max_axis = max(max(real_neg_hist_normalized_by_env.values()), max(real_pos_hist_normalized_by_env.values()), max(virtual_neg_hist_normalized_by_env.values()), max(virtual_pos_hist_normalized_by_env.values()))
+        draw_hist_y_axis(real_neg_hist_normalized_by_env, real_pos_hist_normalized_by_env, cell_type, 'normalized_by_Influence_Area', real_file, y_max_axis)
+        draw_hist_y_axis(virtual_neg_hist_normalized_by_env, virtual_pos_hist_normalized_by_env, cell_type, 'normalized_by_Influence_Area', virtual_file, y_max_axis)
+draw_real_synth_together()
