@@ -46,6 +46,8 @@ from shapely.geometry import Polygon
 from shapely.ops import nearest_points
 from shapely.ops import unary_union
 from tqdm import tqdm
+import cv2
+from shapely.affinity import translate
 
 PathType = ty.Union[str, Path]
 
@@ -362,16 +364,6 @@ def run_spatial_analysis(
             distance_px = round(distance_um / mpp)
             print(f"Working on distance = {distance_um} um ({distance_px} px)")
             tumor_microenv = tumor_exterior.buffer(distance=distance_px)
-            # TODO: this is NOT the same as the method we discussed with Joel and
-            # Mahmudul. We discussed getting all of the POINTS inside the
-            # microenvironment. But here, we take all of the CELLS in the
-            # microenvironment. It's much easier to implement this, so let's roll with
-            # it.
-            # TODO: another way of finding cells that are near tumor is to query whether
-            # the distance of each cell is less than our tumor microenvironment. This
-            # would probably be better than buffering, because the buffer function
-            # seems to introduce some artifacts.
-            # print("Filtering cells in tumor microenvironment...")
             cells_in_microenv = [
                 cell
                 for cell in cells
@@ -677,30 +669,6 @@ def get_npy_and_json_files_for_roi(
         left_x, left_y, patch_size=patch_size, extension="npy", parent=data_root
     )
 
-    # all_top_patches_exist = all(p.exists() for p in top_patches)
-    # all_right_patches_exist = all(p.exists() for p in right_patches)
-    # all_bottom_patches_exist = all(p.exists() for p in bottom_patches)
-    # all_left_patches_exist = all(p.exists() for p in left_patches)
-
-    # Some scenarios should never happen.
-    # TODO: we need to fix this... at upper-left corner, for example, not all of the
-    # right-most patches will exist. Specifically the top patches at the right won't
-    # exist.
-    # if not all_left_patches_exist and not all_right_patches_exist:
-    #     raise FileNotFoundError("some left and right patches do not exist")
-    # if not all_top_patches_exist and not all_bottom_patches_exist:
-    #     raise FileNotFoundError("some top and bottom patches do not exist")
-
-    # At corners, some patches will not exist.
-    # if not all_top_patches_exist and not all_left_patches_exist:
-    #     print("upper-left corner")
-    # elif not all_top_patches_exist and not all_right_patches_exist:
-    #     print("upper-right corner")
-    # elif not all_bottom_patches_exist and not all_left_patches_exist:
-    #     print("bottom-left corner")
-    # elif not all_bottom_patches_exist and not all_right_patches_exist:
-    #     print("bottom-right corner")
-
     border_patches = top_patches + right_patches + bottom_patches + left_patches
     # We have some duplicates because the corners overlap.
     border_patches = list(set(border_patches))
@@ -780,12 +748,8 @@ def cv2_add_patch_exteriors(
     line_thickness: int = 5,
 ) -> np.ndarray:
     """Add exterior of patches to an image.
-
     Negative is cyan by default. Positive is brown by default.
     """
-    import cv2
-    from shapely.affinity import translate
-
     tum_patches = [p.polygon for p in patches if p.patch_type == PatchType.TUMOR]
     pos_patches = [
         p.polygon for p in patches if p.biomarker_status == BiomarkerStatus.POSITIVE
@@ -806,13 +770,16 @@ def cv2_add_patch_exteriors(
     tumor_exterior: MultiLineString = exts["tumor"]
     tumor_polygon = []
     for line in tumor_exterior:
-        multi_tumor_polygon = MultiPolygon(tumor_polygon)
-        new_poly = Polygon(line.coords)
-        if multi_tumor_polygon.contains(new_poly):
-            print("Tumor Polygon found inside another one")
-        else:
-            tumor_polygon.append(new_poly)
+        tumor_polygon.append(Polygon(line.coords))
+
     multi_tumor_polygon = MultiPolygon(tumor_polygon)
+    filtered_polygon = []
+    for poly in tumor_polygon:
+        if not multi_tumor_polygon.contains(poly):
+            filtered_polygon.append(poly)
+        else:
+            print("inside polygon found")
+    multi_tumor_polygon = MultiPolygon(filtered_polygon)
 
     if exts["marker_negative"] is not None:
         for line in exts["marker_negative"]:
@@ -820,7 +787,7 @@ def cv2_add_patch_exteriors(
             assert len(coords) == 2
             coords = [(int(x), int(y)) for x, y in coords]
             point1, point2 = Point(coords[0]), Point(coords[1])
-            if not (multi_tumor_polygon.contains(point1.buffer(5)) or multi_tumor_polygon.contains(point2.buffer(5))):                
+            if not (multi_tumor_polygon.contains(point1.buffer(1)) or multi_tumor_polygon.contains(point2.buffer(1))):                
                 image = cv2.line(
                     image,
                     coords[0],
@@ -835,7 +802,7 @@ def cv2_add_patch_exteriors(
             assert len(coords) == 2
             coords = [(int(x), int(y)) for x, y in coords]
             point1, point2 = Point(coords[0]), Point(coords[1])
-            if not (multi_tumor_polygon.contains(point1.buffer(5)) or multi_tumor_polygon.contains(point2.buffer(5))):
+            if not (multi_tumor_polygon.contains(point1.buffer(1)) or multi_tumor_polygon.contains(point2.buffer(1))):
                 image = cv2.line(
                     image,
                     coords[0],

@@ -5,11 +5,10 @@ import itertools
 import math
 import multiprocessing
 from pathlib import Path
+import os
 import time
 import typing as ty
-
 import tumor_microenv as tm
-
 
 def main(
     *,
@@ -21,7 +20,6 @@ def main(
     mpp: float = 0.34622,
     processes: int = None,
 ):
-    # data_root = Path("data_big/N9430-B11/")
     all_patch_paths = list(data_root.glob("*.npy"))
     # Sort by y then by x.
     all_patch_paths.sort(key=lambda p: p.stem.split("_")[:2][::-1])
@@ -57,6 +55,11 @@ def main(
 
     def run_one_roi(xy: ty.Tuple[int, int]):
         xmin, ymin = xy
+        
+        if os.path.exists(os.path.join(output_dir,"{}-{}_patches.csv".format(xmin,ymin))) and os.path.exists(os.path.join(output_dir,"{}-{}_cells.csv".format(xmin,ymin))):
+            print("Found Existing!")
+            return
+        
         try:
             patch_paths, cell_paths = tm.get_npy_and_json_files_for_roi(
                 xmin=xmin,
@@ -67,8 +70,9 @@ def main(
                 data_root=data_root,
             )
         except tm.CentralPatchFileNotFound:
-            # print("some files not found... returning")
+            #print("some files not found... returning")
             return
+        
         loader = tm.LoaderV1(
             patch_paths,
             cell_paths,
@@ -77,7 +81,9 @@ def main(
             marker_negative=7,
         )
         patches, cells = loader()
-        cells = [c for c in cells if c.cell_type in {"cd4", "cd8", "cd16", "cd163"}]
+
+        #cells = [c for c in cells if c.cell_type in {"cd4", "cd8", "cd16", "cd163"}]
+        cells = [c for c in cells if c.cell_type in {"cd8", "cd16", "cd163"}]
         # Get the centroid per cell.
         # cells = [c._replace(polygon=c.polygon.centroid) for c in cells]
         tm.run_spatial_analysis(
@@ -85,7 +91,7 @@ def main(
             cells=cells,
             microenv_distances=[tumor_microenv],
             mpp=mpp,
-            output_path=output_dir / f"{xmin}-{ymin}.csv",
+            output_path=output_dir / f"{xmin}-{ymin}_cells.csv",
             progress_bar=False,
         )
 
@@ -115,3 +121,9 @@ if __name__ == "__main__":
     )
     t1 = time.time()
     print(f"Finished in {(t1 - t0) / 60:0.1f} minutes")
+
+
+
+
+
+# python run_analysis_wsi.py --data-root /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Input_Data/data_for_tum_micro_2/KYT/1282B --output-dir /data00/shared/mahmudul/Sbu_Kyt_Pdac_merged/Result_Jakub/Tumor_Micro_Result/KYT/1282B --processes 100
